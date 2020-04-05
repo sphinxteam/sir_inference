@@ -1,1 +1,1 @@
-# sir_inference
+# SIR Inference
