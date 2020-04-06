@@ -78,3 +78,7 @@ class InferenceModel():
                        cmap="Blues", vmin=0, vmax=1)
             ax.set(title=state)
         fig.tight_layout()
+
+    def get_counts(self):
+        counts = self.probas.sum(axis=1)
+        return pd.DataFrame(counts, columns=STATES)
