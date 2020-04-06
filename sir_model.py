@@ -7,6 +7,14 @@ logger = logging.getLogger(__name__)
 
 STATES = ["S", "I", "R"]
 
+def get_dummies(states):
+    probas = np.zeros(states.shape + (3,))
+    for s in [0,1,2]:
+        probas[:,:,s] = (states==s)*1
+    assert np.all(probas.argmax(axis=2) == states)
+    return probas
+
+
 def get_infection_probas(states, transmissions):
     """
     - states[i] = state of i
@@ -70,6 +78,7 @@ class EpidemicModel():
             infection_probas = get_infection_probas(states[t], transmissions[t])
             states[t+1] = propagate(states[t], infection_probas, recover_probas)
         self.states = states
+        self.probas = get_dummies(states)
 
     def plot(self, t):
         fig, ax = plt.subplots(1, 1, figsize = (5,5))
@@ -133,8 +142,11 @@ class ProximityModel(EpidemicModel):
         assert np.all(i != j)
         return transmissions
 
-    def run(self, T):
-        print("Generating transmissions")
+    def generate_transmissions(self, T):
         self.transmissions = [self.sample_transmissions() for t in range(T)]
+
+    def run(self, T, print_every=10):
+        print("Generating transmissions")
+        self.generate_transmissions(T)
         print("Running simulation")
-        self.time_evolution(self.recover_probas, self.transmissions)
+        self.time_evolution(self.recover_probas, self.transmissions, print_every=print_every)
