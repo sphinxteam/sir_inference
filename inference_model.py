@@ -63,6 +63,37 @@ class InferenceModel():
         self.probas = probas
         self.states = probas.argmax(axis=2)
 
+    def update_individual(self, i, confirmed_state, confirmed_t, delta_t, recover_probas, transmissions, print_every=10):
+        """
+        Update the probability of three states for individual i's from t - delta_t up to t
+        - confirmed_state = {S, I, R}
+        - confirmed_t = time when the state is confirmed
+        - delta_t = medically estimated time from starting to be infectious to the time of test/syndromes
+        - recover_probas[i] = mu_i time-independent
+        - transmissions[t] = list of t, (i, j, lambda_ij) where (i, j, lambda_ij) is in a sparse matrix
+        - probas[t, i, s] = state of i at time t
+        """
+        probas = self.probas
+        T = len(transmissions)
+
+        for t in range(confirmed_t - delta_t, confirmed_t + 1):
+            if (t % print_every == 0):
+                print(f"t = {t} / {T}")
+            # currently assume the probability of the confirmed state for the individual remains 1 throughout
+            probas[t][i].fill(0)
+            probas[t][i][confirmed_state] = 1.0 
+            infection_probas = get_infection_probas(probas[t], transmissions[t])
+            probas[t+1] = propagate(probas[t], infection_probas, recover_probas)
+        
+        for t in range(confirmed_t + 1, T):
+            if (t % print_every == 0):
+                print(f"t = {t} / {T}")
+            infection_probas = get_infection_probas(probas[t], transmissions[t])
+            probas[t+1] = propagate(probas[t], infection_probas, recover_probas)
+        
+        self.probas = probas
+        self.states = probas.argmax(axis=2)
+
     def plot_states(self, t):
         fig, ax = plt.subplots(1, 1, figsize=(5, 5))
         for idx, state in enumerate(STATES):
