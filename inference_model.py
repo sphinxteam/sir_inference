@@ -15,7 +15,7 @@ def get_infection_probas(probas, transmissions):
     infection_probas = np.zeros(N)
     for i in range(N):
         rates = np.array([
-            probas[i, 1]*rate
+            probas[j, 1]*rate
             for i0, j, rate in transmissions if i0 == i
         ])
         infection_probas[i] = rates.sum()

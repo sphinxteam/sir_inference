@@ -101,23 +101,32 @@ class ProximityModel(EpidemicModel):
     - N = population
     - mu = constant recovery proba
     - lamd = constant transmission rate (if in contact)
-    - proba of contact = np.exp(-distance / scale)
+    - proba_contact = np.exp(-distance / scale)
+    - initial_states = random patient zero
+    - x_pos, y_pos = random uniform
+
+    You can also provide the initial_states, x_pos, y_pos or proba_contact.
     """
-    def __init__(self, N, scale, mu, lamb):
+    def __init__(self, N, scale, mu, lamb,
+    initial_states = None, x_pos = None, y_pos = None, proba_contact = None):
         self.scale = scale
         self.mu = mu
         self.lamb = lamb
         # initial states : patient zero infected
-        patient_zero = np.random.randint(N)
-        initial_states = np.zeros(N)
-        initial_states[patient_zero] = 1
+        if initial_states is None:
+            patient_zero = np.random.randint(N)
+            initial_states = np.zeros(N)
+            initial_states[patient_zero] = 1
         # positions
-        pos = np.sqrt(N)*np.random.rand(N, 2)
-        x_pos, y_pos = pos.T
-        # proba of contact = np.exp(-distance / scale)
-        distance = squareform(pdist(pos))
-        proba_contact = np.exp(-distance / scale)
-        np.fill_diagonal(proba_contact, False) # no contact with oneself
+        x_pos = np.sqrt(N)*np.random.rand(N) if x_pos is None else x_pos
+        y_pos = np.sqrt(N)*np.random.rand(N) if y_pos is None else y_pos
+        if proba_contact is None:
+            # proba of contact = np.exp(-distance / scale)
+            pos = np.array([x_pos, y_pos]).T
+            assert pos.shape == (N, 2)
+            distance = squareform(pdist(pos))
+            proba_contact = np.exp(-distance / scale)
+            np.fill_diagonal(proba_contact, False) # no contact with oneself
         self.proba_contact = proba_contact
         # expected number of contacts
         self.n_contacts = proba_contact.sum()/N
@@ -149,4 +158,6 @@ class ProximityModel(EpidemicModel):
         print("Generating transmissions")
         self.generate_transmissions(T)
         print("Running simulation")
-        self.time_evolution(self.recover_probas, self.transmissions, print_every=print_every)
+        self.time_evolution(
+            self.recover_probas, self.transmissions, print_every=print_every
+        )
