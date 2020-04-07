@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from scipy.spatial.distance import pdist, squareform
+from scipy.sparse import coo_matrix
 import logging
 logger = logging.getLogger(__name__)
 
@@ -18,18 +19,14 @@ def get_dummies(states):
 def get_infection_probas(states, transmissions):
     """
     - states[i] = state of i
-    - transmissions = array/list of i, j, lambda_ij
+    - transmissions = sparse matrix of i, j, lambda_ij
     - infection_probas[i]  = 1 - prod_{j: state==I} [1 - lambda_ij]
     """
     infected = (states == 1)
     N = len(states)
-    infection_probas = np.zeros(N)
-    for i in range(N):
-        rates = np.array([
-            rate for i0, j, rate in transmissions
-            if i0 == i and infected[j]
-        ])
-        infection_probas[i] = 1 - np.prod(1 - rates)
+    infected_transmissions = transmissions.multiply(infected)  # element-wise multiplication for masking
+    infection_probas = (1 - (1-infected_transmissions.toarray()).prod(axis=1)).squeeze()
+    assert len(infection_probas) == N  # sanity check
     return infection_probas
 
 
@@ -63,7 +60,7 @@ class EpidemicModel():
     def time_evolution(self, recover_probas, transmissions, print_every=10):
         """Run the simulation where
         - recover_probas[i] = mu_i time-independent
-        - transmissions[t] = list of t, i, j, lambda_ij(t)
+        - transmissions[t] = list of t, (i, j, lambda_ij) where (i, j, lambda_ij) is in a sparse matrice
         - states[t, i] = state of i at time t
         """
         # initialize states
@@ -140,14 +137,14 @@ class ProximityModel(EpidemicModel):
         return contacts
 
     def sample_transmissions(self):
-        "transmissions = list of t, i, j, lambda_ij"
+        "transmissions = list of t, (i, j, lambda_ij) where (i, j, lambda_ij) is in a sparse matrix"
         contacts = self.sample_contacts()
         i, j = np.where(contacts)
         # constant rate = lamb
         rates = self.lamb * np.ones(len(i))
-        transmissions = list(zip(i, j, rates))
+        transmissions = coo_matrix((rates, (i, j)), shape=(self.N, self.N))
         # sanity check
-        assert contacts.sum() == len(transmissions)
+        assert contacts.sum() == transmissions.nnz  # number of stored values
         assert np.all(i != j)
         return transmissions
 

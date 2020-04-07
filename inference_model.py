@@ -8,17 +8,12 @@ STATES = ["S", "I", "R"]
 def get_infection_probas(probas, transmissions):
     """
     - probas[i,s] = P_s^i(t)
-    - transmissions = array/list of i, j, lambda_ij
+    - transmissions = sparse matrix of i, j, lambda_ij
     - infection_probas[i]  = sum_j lambda_ij P_I^j(t)
     """
     N = probas.shape[0]
-    infection_probas = np.zeros(N)
-    for i in range(N):
-        rates = np.array([
-            probas[j, 1]*rate
-            for i0, j, rate in transmissions if i0 == i
-        ])
-        infection_probas[i] = rates.sum()
+    infection_probas = transmissions.multiply(probas[:, 1]).toarray().sum(axis=1)
+    assert len(infection_probas) == N  # sanity check
     return infection_probas
 
 
