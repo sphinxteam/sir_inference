@@ -8,15 +8,15 @@ STATES = ["S", "I", "R"]
 def get_infection_probas(probas, transmissions):
     """
     - probas[i,s] = P_s^i(t)
-    - transmissions = array/list of i, j, lambda_ij
+    - transmissions = sparse matrix of i, j, lambda_ij
     - infection_probas[i]  = sum_j lambda_ij P_I^j(t)
     """
     N = probas.shape[0]
     infection_probas = np.zeros(N)
     for i in range(N):
+        contact_with_i = transmissions.toarray()[i]
         rates = np.array([
-            probas[i, 1]*rate
-            for i0, j, rate in transmissions if i0 == i
+            probas[i, 1]*rate for rate in contact_with_i[contact_with_i > 0]  # use lambda_ij > 0 to identify people in contact
         ])
         infection_probas[i] = rates.sum()
     return infection_probas
@@ -47,7 +47,7 @@ class InferenceModel():
     def time_evolution(self, recover_probas, transmissions, print_every=10):
         """Run the simulation where
         - recover_probas[i] = mu_i time-independent
-        - transmissions[t] = list of t, i, j, lambda_ij(t)
+        - transmissions[t] = list of t, (i, j, lambda_ij) where (i, j, lambda_ij) is in a sparse matrix
         - probas[t, i, s] = state of i at time t
         """
         # initialize states
