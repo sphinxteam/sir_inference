@@ -12,7 +12,8 @@ def get_infection_probas(probas, transmissions):
     - infection_probas[i]  = sum_j lambda_ij P_I^j(t)
     """
     N = probas.shape[0]
-    infection_probas = transmissions.multiply(probas[:, 1]).toarray().sum(axis=1)
+    infection_probas = np.sum(transmissions.multiply(probas[:, 1]), axis=1)
+    infection_probas = np.squeeze(np.asarray(infection_probas))
     assert len(infection_probas) == N  # sanity check
     return infection_probas
 

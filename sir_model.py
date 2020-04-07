@@ -21,11 +21,14 @@ def get_infection_probas(states, transmissions):
     - states[i] = state of i
     - transmissions = sparse matrix of i, j, lambda_ij
     - infection_probas[i]  = 1 - prod_{j: state==I} [1 - lambda_ij]
+
+    trick prod_j (1 - A_ij) = exp(sum_j ln(1-A_ij))
     """
     infected = (states == 1)
     N = len(states)
     infected_transmissions = transmissions.multiply(infected)  # element-wise multiplication for masking
-    infection_probas = (1 - (1-infected_transmissions.toarray()).prod(axis=1)).squeeze()
+    infection_probas = 1 - np.exp(np.sum(np.log1p(infected_transmissions.multiply(-1)), axis=1))
+    infection_probas = np.squeeze(np.asarray(infection_probas))
     assert len(infection_probas) == N  # sanity check
     return infection_probas
 
