@@ -42,7 +42,7 @@ class InferenceModel():
     def time_evolution(self, recover_probas, transmissions, print_every=10):
         """Run the simulation where
         - recover_probas[i] = mu_i time-independent
-        - transmissions[t] = list of t, i, j, lambda_ij(t)
+        - transmissions[t] = list of t, (i, j, lambda_ij) where (i, j, lambda_ij) is in a sparse matrix
         - probas[t, i, s] = state of i at time t
         """
         # initialize states
