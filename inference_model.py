@@ -35,6 +35,22 @@ def propagate(probas, infection_probas, recover_probas):
     return next_probas
 
 
+def reset_probas(t, probas, observations):
+    """
+    Reset probas[t] according to observations
+    - observations = list of dict(i=i, s=s, t=t) observations at t_obs=t
+    If s=I, the observation must also give t_I the infection time
+    - probas[t, i, s] = P_s^i(t)
+    """
+    for obs in observations:
+        if (obs["s"] == 0) and (t <= obs["t"]):
+            probas[t, obs["i"], :] = [1, 0, 0]  # p_i^S = 1
+        if (obs["s"] == 1) and (obs["t_I"] <= t) and (t <= obs["t"]):
+            probas[t, obs["i"], :] = [0, 1, 0]  # p_i^I = 1
+        if (obs["s"] == 2) and (t >= obs["t"]):
+            probas[t, obs["i"], :] = [0, 0, 1]  # p_i^R = 1
+
+
 class InferenceModel():
     def __init__(self, initial_probas, x_pos, y_pos):
         assert initial_probas.shape[1] == 3
@@ -44,11 +60,14 @@ class InferenceModel():
         self.x_pos = x_pos
         self.y_pos = y_pos
 
-    def time_evolution(self, recover_probas, transmissions, print_every=10):
-        """Run the simulation where
+    def time_evolution(self, recover_probas, transmissions, observations=[], print_every=10):
+        """
+        Run the probability evolution where
         - recover_probas[i] = mu_i time-independent
-        - transmissions[t] = list of t, i, j, lambda_ij(t)
-        - probas[t, i, s] = state of i at time t
+        - transmissions[t] = list of i, j, lambda_ij(t)
+        - observations = list of dict(i=i, s=s, t=t) observations at t_obs=t
+        If s=I, the observation must also give t_I the infection time
+        - probas[t, i, s] = P_s^i(t)
         """
         # initialize states
         T = len(transmissions)
@@ -58,6 +77,7 @@ class InferenceModel():
         for t in range(T):
             if (t % print_every == 0):
                 print(f"t = {t} / {T}")
+            reset_probas(t, probas, observations)
             infection_probas = get_infection_probas(probas[t], transmissions[t])
             probas[t+1] = propagate(probas[t], infection_probas, recover_probas)
         self.probas = probas
@@ -65,8 +85,8 @@ class InferenceModel():
 
     def plot_states(self, t):
         fig, ax = plt.subplots(1, 1, figsize=(5, 5))
-        for idx, state in enumerate(STATES):
-            ind = np.where(self.states[t] == idx)
+        for s, state in enumerate(STATES):
+            ind = np.where(self.states[t] == s)
             ax.scatter(self.x_pos[ind], self.y_pos[ind], label=state)
         ax.set(title="t = %d" % t)
         ax.legend()
@@ -78,6 +98,25 @@ class InferenceModel():
                        cmap="Blues", vmin=0, vmax=1)
             ax.set(title=state)
         fig.tight_layout()
+
+    def plot_probas_obs(self, t, model, observations, t_start):
+        fig, axs = plt.subplots(1, 3, figsize=(12, 4), sharey=True)
+        for s, (ax, state) in enumerate(zip(axs, STATES)):
+            ax.scatter(self.x_pos, self.y_pos, c=self.probas[t, :, s],
+                       cmap="Blues", vmin=0, vmax=1)
+            ind, = np.where(model.states[t_start + t] == s)
+            observed = [
+                obs["i"] for obs in observations
+                if (obs["t_test"] == t_start + t) and (obs["s"] == s)
+            ]
+            unobserved = [i for i in ind if i not in observed]
+            ax.scatter(model.x_pos[observed], model.y_pos[observed],
+                facecolors='none', edgecolors='r')
+            ax.scatter(model.x_pos[unobserved], model.y_pos[unobserved],
+                facecolors='none', edgecolors='g')
+            ax.set(title=state)
+        fig.tight_layout()
+
 
     def get_counts(self):
         counts = self.probas.sum(axis=1)
