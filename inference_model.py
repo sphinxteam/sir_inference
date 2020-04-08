@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+from scipy.sparse import coo_matrix
 import matplotlib.pyplot as plt
 
 STATES = ["S", "I", "R"]
@@ -8,17 +9,10 @@ STATES = ["S", "I", "R"]
 def get_infection_probas(probas, transmissions):
     """
     - probas[i,s] = P_s^i(t)
-    - transmissions = array/list of i, j, lambda_ij
+    - transmissions = csr sparse matrix of i, j, lambda_ij
     - infection_probas[i]  = sum_j lambda_ij P_I^j(t)
     """
-    N = probas.shape[0]
-    infection_probas = np.zeros(N)
-    for i in range(N):
-        rates = np.array([
-            probas[j, 1]*rate
-            for i0, j, rate in transmissions if i0 == i
-        ])
-        infection_probas[i] = rates.sum()
+    infection_probas = transmissions.dot(probas[:, 1])
     return infection_probas
 
 
@@ -64,7 +58,7 @@ class InferenceModel():
         """
         Run the probability evolution where
         - recover_probas[i] = mu_i time-independent
-        - transmissions[t] = list of i, j, lambda_ij(t)
+        - transmissions[t] = csr sparse matrix of i, j, lambda_ij(t)
         - observations = list of dict(i=i, s=s, t=t) observations at t_obs=t
         If s=I, the observation must also give t_I the infection time
         - probas[t, i, s] = P_s^i(t)
