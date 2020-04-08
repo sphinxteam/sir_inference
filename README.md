@@ -1,5 +1,3 @@
 # SIR Inference
 
-TODO
-- dynamic message passing
-- cross-entropy
+See the different notebooks for a demo.
