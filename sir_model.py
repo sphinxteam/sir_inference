@@ -140,7 +140,7 @@ class ProximityModel(EpidemicModel):
             assert pos.shape == (N, 2)
             distance = squareform(pdist(pos))
             proba_contact = np.exp(-distance / scale)
-            np.fill_diagonal(proba_contact, False) # no contact with oneself
+            np.fill_diagonal(proba_contact, 0.) # no contact with oneself
         self.proba_contact = proba_contact
         # expected number of contacts
         self.n_contacts = proba_contact.sum()/N
