@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+import networkx as nx
 import matplotlib.pyplot as plt
 from scipy.sparse import coo_matrix
 from scipy.spatial.distance import pdist, squareform
@@ -94,6 +95,20 @@ class EpidemicModel():
         }
         return pd.DataFrame(counts)
 
+    def sample_transmissions(self):
+        raise NotImplementedError
+
+    def generate_transmissions(self, T):
+        self.transmissions = [self.sample_transmissions() for t in range(T)]
+
+    def run(self, T, print_every=10):
+        print("Generating transmissions")
+        self.generate_transmissions(T)
+        print("Running simulation")
+        self.time_evolution(
+            self.recover_probas, self.transmissions, print_every=print_every
+        )
+
 class ProximityModel(EpidemicModel):
     """
     Model:
@@ -148,19 +163,10 @@ class ProximityModel(EpidemicModel):
         i, j = np.where(contacts)
         # constant rate = lamb
         rates = self.lamb * np.ones(len(i))
-        transmissions = coo_matrix((rates, (i, j)), shape=(self.N, self.N)).tocsr()
+        transmissions = coo_matrix(
+            (rates, (i, j)), shape=(self.N, self.N)
+        ).tocsr()
         # sanity check
         assert contacts.sum() == transmissions.nnz
         assert np.all(i != j)
         return transmissions
-
-    def generate_transmissions(self, T):
-        self.transmissions = [self.sample_transmissions() for t in range(T)]
-
-    def run(self, T, print_every=10):
-        print("Generating transmissions")
-        self.generate_transmissions(T)
-        print("Running simulation")
-        self.time_evolution(
-            self.recover_probas, self.transmissions, print_every=print_every
-        )
