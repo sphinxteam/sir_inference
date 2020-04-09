@@ -62,7 +62,7 @@ class EpidemicModel():
     def time_evolution(self, recover_probas, transmissions, print_every=10):
         """Run the simulation where
         - recover_probas[i] = mu_i time-independent
-        - transmissions[t] = csr sparse matrix of t, i, j, lambda_ij(t)
+        - transmissions[t] = csr sparse matrix of i, j, lambda_ij(t)
         - states[t, i] = state of i at time t
         """
         # initialize states
@@ -134,12 +134,16 @@ class ProximityModel(EpidemicModel):
         super().__init__(initial_states, x_pos, y_pos)
 
     def sample_contacts(self):
-        "contacts[i,j] = if i and j in contact"
-        contacts = np.random.rand(self.N, self.N) < self.proba_contact
+        "contacts[i,j] = symmetric matrix, flag if i and j in contact"
+        # sample only in lower triangular
+        A = np.random.rand(self.N, self.N) < self.proba_contact
+        L = np.tril(A, -1)
+        # symmetrize
+        contacts = np.maximum(L, L.T)
         return contacts
 
     def sample_transmissions(self):
-        "transmissions = csr sparse matrix of t, i, j, lambda_ij"
+        "transmissions = csr sparse matrix of i, j, lambda_ij"
         contacts = self.sample_contacts()
         i, j = np.where(contacts)
         # constant rate = lamb
