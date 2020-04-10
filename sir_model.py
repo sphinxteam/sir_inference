@@ -170,3 +170,71 @@ class ProximityModel(EpidemicModel):
         assert contacts.sum() == transmissions.nnz
         assert np.all(i != j)
         return transmissions
+
+
+class NetworkModel(EpidemicModel):
+    """
+    Model:
+    - graph = networkx undirected graph
+    - mu = constant recovery proba
+    - lamd = constant transmission rate (if in contact)
+    - proba_contact = float, constant proba for all edges and time steps.
+    At time step t, the edge ij is activated as a contact with proba_contact.
+    So the contacts network is at each time a subgraph of the original graph.
+    proba_contact = 1 corresponds to the fixed contacts network case.
+    - initial_states = random patient zero by default
+    - layout = spring layout by default
+
+    You can also provide the initial_states and layout.
+    """
+    def __init__(self, graph, mu, lamb, proba_contact,
+    initial_states = None, layout = None):
+        self.graph = graph
+        self.n_edges = graph.number_of_edges()
+        self.mu = mu
+        self.lamb = lamb
+        self.proba_contact = proba_contact
+        N = graph.number_of_nodes()
+        # initial states : patient zero infected
+        if initial_states is None:
+            patient_zero = np.random.randint(N)
+            initial_states = np.zeros(N)
+            initial_states[patient_zero] = 1
+        # positions
+        if layout is None:
+            print("Computing spring layout")
+            layout = nx.spring_layout(graph)
+        x_pos = np.array([layout[i][0] for i in graph.nodes])
+        y_pos = np.array([layout[i][1] for i in graph.nodes])
+        # expected number of contacts
+        self.n_contacts = 2*self.n_edges*proba_contact/N
+        # constant recovery proba
+        self.recover_probas = mu*np.ones(N)
+        super().__init__(initial_states, x_pos, y_pos)
+
+    def sample_contacts(self):
+        "contacts = list of i and j in contact"
+        # each edge is selected with proba_contact
+        selected = np.random.rand(self.n_edges) <= self.proba_contact
+        contacts = [
+            (i, j) for idx, (i, j) in enumerate(self.graph.edges)
+            if selected[idx]
+        ]
+        # symmetrize
+        contacts += [(j, i) for (i, j) in contacts]
+        return contacts
+
+    def sample_transmissions(self):
+        "transmissions = csr sparse matrix of i, j, lambda_ij"
+        contacts = self.sample_contacts()
+        i = [i_ for (i_, j_) in contacts]
+        j = [j_ for (i_, j_) in contacts]
+        # constant rate = lamb
+        rates = self.lamb * np.ones(len(i))
+        transmissions = coo_matrix(
+            (rates, (i, j)), shape=(self.N, self.N)
+        ).tocsr()
+        # sanity check
+        assert len(contacts) == transmissions.nnz
+        assert np.all(i != j)
+        return transmissions
