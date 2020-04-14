@@ -4,9 +4,9 @@ import matplotlib.pyplot as plt
 from .sir_model import indicator
 
 
-def generate_scatterplot(model, infer, n_run, times):
+def compute_averages(model, infer, n_run, times):
     """
-    Compare the Monte Carlo frequencies vs the average estimated probabilites.
+    Computes the Monte Carlo frequencies and average estimated probabilites.
     - model : EpidemicModel instance to generate the SIR simulation
     - infer : BaseInference instance to estimate the probabilites
     - n_run : number of Monte Carlo runs
@@ -28,10 +28,22 @@ def generate_scatterplot(model, infer, n_run, times):
         states[n] = indicator(model.states[times])
         infer.time_evolution(model.recover_probas, model.transmissions, print_every=0)
         probas[n] = infer.probas[times]
-    # avg_states[t,i,s] = < q_i(t) == s > ; <.> over monte carlo runs
-    avg_states = states.mean(axis=0)
-    # avg_probas[t,i,s] = < p_i^s[t] >
-    avg_probas = probas.mean(axis=0)
+    # <.> over monte carlo runs
+    avg_states = states.mean(axis=0) # avg_states[t,i,s] = < q_i(t) == s >
+    avg_probas = probas.mean(axis=0) # avg_probas[t,i,s] = < p_i^s[t] >
+    return avg_states, avg_probas
+
+
+def generate_scatterplot(model, infer, n_run, times):
+    """
+    Scatterplot of the Monte Carlo frequencies vs the estimated probabilites.
+    - model : EpidemicModel instance to generate the SIR simulation
+    - infer : BaseInference instance to estimate the probabilites
+    - n_run : number of Monte Carlo runs
+    - times : times at which to look at
+    """
+    avg_states, avg_probas = compute_averages(model, infer, n_run, times)
+    n_times = len(times)
     # scatterplot
     STATES = "SIR"
     fig, axs = plt.subplots(
