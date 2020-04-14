@@ -9,11 +9,11 @@ logger = logging.getLogger(__name__)
 
 STATES = ["S", "I", "R"]
 
-def get_dummies(states):
+def indicator(states):
     probas = np.zeros(states.shape + (3,))
     for s in [0,1,2]:
-        probas[:,:,s] = (states==s)*1
-    assert np.all(probas.argmax(axis=2) == states)
+        probas[..., s] = (states==s)*1
+    assert np.all(probas.argmax(axis = -1) == states)
     return probas
 
 
@@ -21,15 +21,15 @@ def get_infection_probas(states, transmissions):
     """
     - states[i] = state of i
     - transmissions = csr sparse matrix of i, j, lambda_ij
-    - infection_probas[i]  = 1 - prod_{j: state==I} [1 - lambda_ij]
-    We use prod_j  [1 - lambda_ij] = exp(sum_j log(1 - lambda_ij))
+    - infection_probas[i]  = 1 - prod_{j: s[j]==I} [1 - lambda_ij]
+    We use prod_{j:I}  [1 - lambda_ij] = exp(
+        sum_j log(1 - lambda_ij) (s[j]==I)
+    )
     """
     infected = (states == 1)
-    infected_transmissions = transmissions.multiply(infected)
     infection_probas = 1 - np.exp(
-        infected_transmissions.multiply(-1).log1p().sum(axis=1)
+        transmissions.multiply(-1).log1p().dot(infected)
     )
-    infection_probas = np.array(infection_probas).squeeze()
     return infection_probas
 
 
@@ -73,12 +73,12 @@ class EpidemicModel():
         states[0] = self.initial_states
         # iterate over time steps
         for t in range(T):
-            if (t % print_every == 0):
+            if print_every and (t % print_every == 0):
                 print(f"t = {t} / {T}")
             infection_probas = get_infection_probas(states[t], transmissions[t])
             states[t+1] = propagate(states[t], infection_probas, recover_probas)
         self.states = states
-        self.probas = get_dummies(states)
+        self.probas = indicator(states)
 
     def plot(self, t):
         fig, ax = plt.subplots(1, 1, figsize = (5,5))
@@ -102,9 +102,11 @@ class EpidemicModel():
         self.transmissions = [self.sample_transmissions() for t in range(T)]
 
     def run(self, T, print_every=10):
-        print("Generating transmissions")
+        if print_every:
+            print("Generating transmissions")
         self.generate_transmissions(T)
-        print("Running simulation")
+        if print_every:
+            print("Running simulation")
         self.time_evolution(
             self.recover_probas, self.transmissions, print_every=print_every
         )
