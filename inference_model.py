@@ -38,7 +38,7 @@ def update_dmp(history, kappa, P_bar, phi,
     - phi_vec[j] = phi^j(t)
     - probas[j,s] = P_s^j(t)
 
-    - transmissions = csr sparse matrix of i, j, kappa_ij(t)
+    - transmissions = csr sparse matrix of i, j, lambda_ij(t)
     - recover_probas[j] = mu_j
 
     Returns
@@ -97,7 +97,7 @@ def update_dmp(history, kappa, P_bar, phi,
 def get_infection_probas_mean_field(probas, transmissions):
     """
     - probas[i,s] = P_s^i(t)
-    - transmissions = csr sparse matrix of i, j, lambda_ij
+    - transmissions = csr sparse matrix of i, j, lambda_ij(t)
     - infection_probas[i]  = sum_j lambda_ij P_I^j(t)
     """
     infection_probas = transmissions.dot(probas[:, 1])
@@ -184,7 +184,7 @@ class BaseInference():
 
 def get_full_contacts(transmissions):
     """
-    - transmissions[t] = csr sparse matrix of i, j, lambda_ij
+    - transmissions[t] = csr sparse matrix of i, j, lambda_ij(t)
     - full_contacts = csr sparse matrix of i, j in contact at any time t
     """
     full_contacts = (transmissions[0] != 0)
