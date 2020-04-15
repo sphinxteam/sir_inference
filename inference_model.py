@@ -70,13 +70,14 @@ def sum_messages(A, contacts):
     return B
 
 
-def get_infection_messages(kappa, contacts, kappa_next):
+def get_infection_messages(kappa, contacts, kappa_next, full_contacts):
     """
     Parameters
     ----------
     - kappa = csr sparse matrix of i, j, kappa_ij(t)
     - contacts = csr sparse matrix of i, j in contact at t
     - kappa_next = csr sparse matrix of i, j, kappa_ij(t+1)
+    - full_contacts = csr sparse matrix of i, j in contact at any time
 
     Returns
     -------
@@ -89,13 +90,11 @@ def get_infection_messages(kappa, contacts, kappa_next):
     A_next = sum_messages(kappa_next.multiply(-1).log1p(), contacts)
     dA = A_next - A
     infection_messages = dA.expm1().multiply(-1)
-    #cutoff = 1e-2
-    #infection_messages = (infection_messages>cutoff).multiply(infection_messages)
-    #infection_messages.eliminate_zeros()
+    infection_messages = full_contacts.multiply(infection_messages)
     return infection_messages
 
 
-def update_messages(kappa, P_bar, phi, transmissions, recover_probas):
+def update_messages(kappa, P_bar, phi, transmissions, recover_probas, full_contacts):
     """
     Parameters
     ----------
@@ -104,6 +103,7 @@ def update_messages(kappa, P_bar, phi, transmissions, recover_probas):
     - phi = csr sparse matrix of i, j, phi_ij(t)
     - transmissions = csr sparse matrix of i, j, kappa_ij(t)
     - recover_probas[i] = mu_i
+    - full_contacts = csr sparse matrix of i, j in contact at any time
 
     Returns
     -------
@@ -113,7 +113,7 @@ def update_messages(kappa, P_bar, phi, transmissions, recover_probas):
     """
     kappa_next = kappa + transmissions.multiply(phi)
     contacts = (transmissions != 0)
-    rho = get_infection_messages(kappa, contacts, kappa_next)
+    rho = get_infection_messages(kappa, contacts, kappa_next, full_contacts)
     delta_P_bar = rho - rho.multiply(P_bar)
     P_bar_next = P_bar + delta_P_bar
     phi_next = (
@@ -234,6 +234,18 @@ class BaseInference():
         return pd.DataFrame(counts, columns=STATES)
 
 
+def get_full_contacts(transmissions):
+    """
+    - transmissions[t] = csr sparse matrix of i, j, lambda_ij
+    - full_contacts = csr sparse matrix of i, j in contact at any time t
+    """
+    full_contacts = (transmissions[0] != 0)
+    for tr in transmissions:
+        contacts = (tr != 0)
+        full_contacts = full_contacts.maximum(contacts)
+    return full_contacts
+
+
 class MeanField(BaseInference):
 
     def time_evolution(self, recover_probas, transmissions, observations=[], print_every=10):
@@ -281,6 +293,9 @@ class DynamicMessagePassing(BaseInference):
         """
         # initialize messages
         kappa, P_bar, phi = initial_messages(self.initial_probas)
+        full_contacts = get_full_contacts(transmissions)
+        P_bar = full_contacts.multiply(P_bar)
+        phi = full_contacts.multiply(phi)
         records = [] # DEBUG
         # initialize probas
         T = len(transmissions)
@@ -296,7 +311,7 @@ class DynamicMessagePassing(BaseInference):
             # update
             contacts = (transmissions[t] != 0)
             kappa_next, P_bar_next, phi_next = update_messages(
-                kappa, P_bar, phi, transmissions[t], recover_probas
+                kappa, P_bar, phi, transmissions[t], recover_probas, full_contacts
             )
             infection_probas = get_infection_probas_dmp(
                 kappa, contacts, kappa_next
@@ -305,7 +320,7 @@ class DynamicMessagePassing(BaseInference):
                 probas[t], infection_probas, recover_probas
             )
             # DEBUG : record info
-            rho = get_infection_messages(kappa, contacts, kappa_next)
+            rho = get_infection_messages(kappa, contacts, kappa_next, full_contacts)
             delta_P_bar = rho - rho.multiply(P_bar)
             records.append(infos_csr(t, "transmissions", transmissions[t]))
             records.append(infos_csr(t, "contacts", contacts))
