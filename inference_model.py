@@ -9,14 +9,14 @@ STATES = ["S", "I", "R"]
 def infos_csr(t, name, array):
     return dict(
         t=t, name=name, shape=array.shape, nnz=array.nnz,
-        nan=(array==np.nan).sum(), min=array.min(), max=array.max()
+        nan=(array == np.nan).sum(), min=array.min(), max=array.max()
     )
 
 
 def infos_array(t, name, array):
     return dict(
-        t=t, name=name, shape=array.shape, nnz=(array!=0).sum(),
-        nan=(array==np.nan).sum(), min=array.min(), max=array.max()
+        t=t, name=name, shape=array.shape, nnz=(array != 0).sum(),
+        nan=(array == np.nan).sum(), min=array.min(), max=array.max()
     )
 
 
@@ -25,124 +25,72 @@ def zero_csr(N):
     return csr_matrix((data, (i, j)), shape=(N, N))
 
 
-def vector_csr(v):
-    """
-    - A = csr matrix A_ij = v_j
-    """
-    A = np.tile(v, (len(v), 1))
-    return csr_matrix(A)
-
-
-def initial_messages(initial_probas):
-    """
-    - initial_probas[j, s] = P_s^j(t=0)
-    - kappa = csr sparse matrix of i, j, kappa_ij(0) = 0
-    - P_bar = csr sparse matrix of i, j, P_bar_ij(0) = 1 - P_j^S(0)
-    - phi = csr sparse matrix of i, j, phi_ij(0) = P_j^I(0)
-    """
-    N = initial_probas.shape[0]
-    kappa = zero_csr(N)
-    P_bar = vector_csr(1 - initial_probas[:,0])
-    phi = vector_csr(initial_probas[:,1])
-    return kappa, P_bar, phi
-
-
-def sum_contacts(A, contacts):
-    """
-    - A = csr sparse matrix of i, k, A_ik
-    - contacts = csr sparse matrix of i, k in contact
-    - a_i = sum_{k in i} A_ik  = sum_k A_ik contacts_ik
-    """
-    ones = np.ones(A.shape[0])
-    a = A.multiply(contacts).dot(ones)
-    return a
-
-
-def sum_messages(A, contacts):
-    """
-    - A = csr sparse matrix of j, k, A_jk
-    - contacts = csr sparse matrix of j, k in contact
-    - B_ij = sum_{k in j\i} A_jk  = sum_k A_jk contacts_jk (k != i)
-    """
-    unequal = 1 - np.identity(A.shape[0])
-    B_transpose = A.multiply(contacts).dot(unequal)
-    B = csr_matrix(B_transpose).transpose()
-    return B
-
-
-def get_infection_messages(kappa, contacts, kappa_next, full_contacts):
+def update_dmp(history, kappa, P_bar, phi,
+               P_bar_vec, phi_vec, probas, transmissions, recover_probas):
     """
     Parameters
     ----------
-    - kappa = csr sparse matrix of i, j, kappa_ij(t)
-    - contacts = csr sparse matrix of i, j in contact at t
-    - kappa_next = csr sparse matrix of i, j, kappa_ij(t+1)
-    - full_contacts = csr sparse matrix of i, j in contact at any time
-
-    Returns
-    -------
-    - infection_messages = csr sparse matrix of i, j, rho_ij
-    rho_ij = 1 - exp(
-        sum_{k in j(t)\i} ln[1 - kappa_jk(t+1)] - ln[1 - kappa_jk(t)]
-    )
-    """
-    A = sum_messages(kappa.multiply(-1).log1p(), contacts)
-    A_next = sum_messages(kappa_next.multiply(-1).log1p(), contacts)
-    dA = A_next - A
-    infection_messages = dA.expm1().multiply(-1)
-    infection_messages = full_contacts.multiply(infection_messages)
-    return infection_messages
-
-
-def update_messages(kappa, P_bar, phi, transmissions, recover_probas, full_contacts):
-    """
-    Parameters
-    ----------
+    - history = csr sparse matrix of i, j in contact < t
     - kappa = csr sparse matrix of i, j, kappa_ij(t)
     - P_bar = csr sparse matrix of i, j, P_bar_ij(t)
     - phi = csr sparse matrix of i, j, phi_ij(t)
+    - P_bar_vec[j] = P_bar^j(t) = 1 - P_S^j(t)
+    - phi_vec[j] = phi^j(t)
+    - probas[j,s] = P_s^j(t)
+
     - transmissions = csr sparse matrix of i, j, kappa_ij(t)
-    - recover_probas[i] = mu_i
-    - full_contacts = csr sparse matrix of i, j in contact at any time
+    - recover_probas[j] = mu_j
 
     Returns
     -------
+    - history_next = csr sparse matrix of i, j in contact < t+1
     - kappa_next = csr sparse matrix of i, j, kappa_ij(t+1)
     - P_bar_next = csr sparse matrix of i, j, P_bar_ij(t+1)
     - phi_next = csr sparse matrix of i, j, phi_ij(t+1)
+    - P_bar_vec_next[j] = P_bar^j(t+1) = 1 - P_S^j(t+1)
+    - phi_vec_next[j] = phi^j(t+1)
+    - probas_next[j,s] = P_s^j(t+1)
     """
-    kappa_next = kappa + transmissions.multiply(phi)
-    contacts = (transmissions != 0)
-    rho = get_infection_messages(kappa, contacts, kappa_next, full_contacts)
-    delta_P_bar = rho - rho.multiply(P_bar)
-    P_bar_next = P_bar + delta_P_bar
+    # deal with contacts
+    contacts = (transmissions != 0)                             # ij = t
+    history_next = contacts.maximum(history)                    # ij = t or < t
+    new_contacts = contacts - contacts.minimum(history)         # ij = t &! < t
+    # store new contacts
+    P_bar_all = P_bar + new_contacts.multiply(P_bar_vec)        # ij = t or < t
+    phi_all = phi + new_contacts.multiply(phi_vec)              # ij = t or < t
+    # update kappa
+    kappa_next = kappa + transmissions.multiply(phi_all)        # ij = t or < t
+    # infection probas
+    L = kappa.multiply(-1).log1p().multiply(contacts)           # ij = t
+    L_next = kappa_next.multiply(-1).log1p().multiply(contacts) # ij = t
+    dL = L_next - L                                             # ij = t
+    ones = np.ones(kappa.shape[0])
+    da = dL.dot(ones)
+    rho_vec = -np.expm1(da)
+    # infection messages
+    dA = history_next.multiply(da) - dL                         # ij = t or < t
+    rho = dA.expm1().multiply(-1)                               # ij = t or < t
+    # update P_bar and phi
+    delta_P_bar = rho - rho.multiply(P_bar_all)                 # ij = t or < t
+    P_bar_next = P_bar_all + delta_P_bar
     phi_next = (
-        (phi - phi.multiply(transmissions)).multiply(1 - recover_probas)
+        (phi_all - phi_all.multiply(transmissions)).multiply(1 - recover_probas)
         + delta_P_bar
     )
-    return kappa_next, P_bar_next, phi_next
-
-
-def get_infection_probas_dmp(kappa, contacts, kappa_next):
-    """
-    Parameters
-    ----------
-    - kappa = csr sparse matrix of i, j, kappa_ij(t)
-    - contacts = csr sparse matrix of i, j in contact at t
-    - kappa_next = csr sparse matrix of i, j, kappa_ij(t+1)
-
-    Returns
-    -------
-    - infection_probas = array
-    rho_i = 1 - exp(
-        sum_{k in i(t)} ln[1 - kappa_ik(t+1)] - ln[1 - kappa_ik(t)]
+    # update vectors
+    delta_P_bar_vec = rho_vec*(1 - P_bar_vec)
+    P_bar_vec_next = P_bar_vec + delta_P_bar_vec
+    phi_vec_next = phi_vec*(1 - recover_probas) + delta_P_bar_vec
+    # update probas
+    probas_next = propagate(probas, rho_vec, recover_probas)
+    # sanity check
+    assert np.allclose(P_bar_vec, 1 - probas[:, 0])
+    assert np.allclose(P_bar_vec_next, 1 - probas_next[:, 0])
+    return (
+        history_next,
+        kappa_next, P_bar_next, phi_next,
+        P_bar_vec_next, phi_vec_next, probas_next
     )
-    """
-    a = sum_contacts(kappa.multiply(-1).log1p(), contacts)
-    a_next = sum_contacts(kappa_next.multiply(-1).log1p(), contacts)
-    da = a_next - a
-    infection_probas = -np.expm1(da)
-    return infection_probas
 
 
 ############### Mean field ##############################
@@ -276,8 +224,10 @@ class MeanField(BaseInference):
         self.probas = probas
         self.states = probas.argmax(axis=2)
 
+
 # alias for backward compatibility
 InferenceModel = MeanField
+
 
 class DynamicMessagePassing(BaseInference):
 
@@ -292,11 +242,10 @@ class DynamicMessagePassing(BaseInference):
         - probas[t, i, s] = P_s^i(t)
         """
         # initialize messages
-        kappa, P_bar, phi = initial_messages(self.initial_probas)
-        full_contacts = get_full_contacts(transmissions)
-        P_bar = full_contacts.multiply(P_bar)
-        phi = full_contacts.multiply(phi)
-        records = [] # DEBUG
+        history = kappa = P_bar = phi = zero_csr(self.N)
+        P_bar_vec = 1 - self.initial_probas[:, 0]
+        phi_vec = self.initial_probas[:, 1]
+        records = []  # DEBUG
         # initialize probas
         T = len(transmissions)
         probas = np.zeros((T, self.N, 3))
@@ -309,33 +258,20 @@ class DynamicMessagePassing(BaseInference):
             if (t >= T-1):
                 break
             # update
-            contacts = (transmissions[t] != 0)
-            kappa_next, P_bar_next, phi_next = update_messages(
-                kappa, P_bar, phi, transmissions[t], recover_probas, full_contacts
+            new = update_dmp(
+                history, kappa, P_bar, phi, P_bar_vec, phi_vec, probas[t],
+                transmissions[t], recover_probas
             )
-            infection_probas = get_infection_probas_dmp(
-                kappa, contacts, kappa_next
-            )
-            probas[t+1] = propagate(
-                probas[t], infection_probas, recover_probas
-            )
+            history, kappa, P_bar, phi, P_bar_vec, phi_vec, probas[t+1] = new
             # DEBUG : record info
-            rho = get_infection_messages(kappa, contacts, kappa_next, full_contacts)
-            delta_P_bar = rho - rho.multiply(P_bar)
             records.append(infos_csr(t, "transmissions", transmissions[t]))
-            records.append(infos_csr(t, "contacts", contacts))
-            records.append(infos_array(t, "probas", probas[t]))
+            records.append(infos_csr(t, "history", history))
             records.append(infos_csr(t, "kappa", kappa))
             records.append(infos_csr(t, "P_bar", P_bar))
             records.append(infos_csr(t, "phi", phi))
-            records.append(infos_csr(t, "rho", rho))
-            records.append(infos_csr(t, "delta_P_bar", delta_P_bar))
-            records.append(infos_csr(t, "kappa_next", kappa_next))
-            records.append(infos_csr(t, "P_bar_next", P_bar_next))
-            records.append(infos_csr(t, "phi_next", phi_next))
-            records.append(infos_array(t, "infection_probas", infection_probas))
-            # next iteration
-            kappa, P_bar, phi = kappa_next, P_bar_next, phi_next
-        self.records = pd.DataFrame(records) # DEBUG
+            records.append(infos_array(t, "P_bar_vec", P_bar_vec))
+            records.append(infos_array(t, "phi_vec", phi_vec))
+            records.append(infos_array(t, "probas", probas[t]))
+        self.records = pd.DataFrame(records)  # DEBUG
         self.probas = probas
         self.states = probas.argmax(axis=2)

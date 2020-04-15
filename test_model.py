@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+from time import time
 from .sir_model import indicator
 
 
@@ -18,6 +19,7 @@ def compute_averages(model, infer, n_run, times):
     infer.initial_probas = indicator(model.initial_states)
     # storage, states (as indicator) and probas
     n_times = len(times)
+    t_runs = np.zeros(n_run)
     states = np.zeros((n_run, n_times, model.N, 3))
     probas = np.zeros((n_run, n_times, model.N, 3))
     # monte carlo runs
@@ -26,8 +28,14 @@ def compute_averages(model, infer, n_run, times):
         t_max = max(times) + 1
         model.run(t_max, print_every=0)
         states[n] = indicator(model.states[times])
+        tic = time()
         infer.time_evolution(model.recover_probas, model.transmissions, print_every=0)
+        t_runs[n] = time() - tic
         probas[n] = infer.probas[times]
+    print(
+        f"run times from {t_runs.min():.1e}s to {t_runs.max():.1e}s "
+        f"median {np.median(t_runs):.1e}s"
+    )
     # <.> over monte carlo runs
     avg_states = states.mean(axis=0) # avg_states[t,i,s] = < q_i(t) == s >
     avg_probas = probas.mean(axis=0) # avg_probas[t,i,s] = < p_i^s[t] >
