@@ -51,6 +51,8 @@ def update_dmp(history, kappa, P_bar, phi,
     - phi_vec_next[j] = phi^j(t+1)
     - probas_next[j,s] = P_s^j(t+1)
     """
+    # set P_bar_vec
+    P_bar_vec = 1 - probas[:, 0]
     # deal with contacts
     contacts = (transmissions != 0)                             # ij = t
     history_next = contacts.maximum(history)                    # ij = t or < t
@@ -84,8 +86,8 @@ def update_dmp(history, kappa, P_bar, phi,
     # update probas
     probas_next = propagate(probas, rho_vec, recover_probas)
     # sanity check
-    #assert np.allclose(P_bar_vec, 1 - probas[:, 0])
-    #assert np.allclose(P_bar_vec_next, 1 - probas_next[:, 0])
+    assert np.allclose(P_bar_vec, 1 - probas[:, 0])
+    assert np.allclose(P_bar_vec_next, 1 - probas_next[:, 0])
     return (
         history_next,
         kappa_next, P_bar_next, phi_next,
