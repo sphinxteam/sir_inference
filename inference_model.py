@@ -84,8 +84,8 @@ def update_dmp(history, kappa, P_bar, phi,
     # update probas
     probas_next = propagate(probas, rho_vec, recover_probas)
     # sanity check
-    assert np.allclose(P_bar_vec, 1 - probas[:, 0])
-    assert np.allclose(P_bar_vec_next, 1 - probas_next[:, 0])
+    #assert np.allclose(P_bar_vec, 1 - probas[:, 0])
+    #assert np.allclose(P_bar_vec_next, 1 - probas_next[:, 0])
     return (
         history_next,
         kappa_next, P_bar_next, phi_next,
