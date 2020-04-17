@@ -25,6 +25,18 @@ def zero_csr(N):
     return csr_matrix((data, (i, j)), shape=(N, N))
 
 
+def fill_csr(A, j, value):
+    """Fill A_ij = value (nonzeros elements only)
+    - A : csr sparse matrix i, j, A_ij
+    - j : col number
+    - value : fill value
+    """
+    a = A.getcol(j)
+    idx = a.nonzero()
+    a[idx] = value
+    A[:, j] = a
+
+
 def update_dmp(history, kappa, P_bar, phi,
                P_bar_vec, phi_vec, probas, transmissions, recover_probas):
     """
@@ -51,8 +63,6 @@ def update_dmp(history, kappa, P_bar, phi,
     - phi_vec_next[j] = phi^j(t+1)
     - probas_next[j,s] = P_s^j(t+1)
     """
-    # set P_bar_vec
-    P_bar_vec = 1 - probas[:, 0]
     # deal with contacts
     contacts = (transmissions != 0)                             # ij = t
     history_next = contacts.maximum(history)                    # ij = t or < t
@@ -134,6 +144,29 @@ def reset_probas(t, probas, observations):
             probas[t, obs["i"], :] = [0, 1, 0]  # p_i^I = 1
         if (obs["s"] == 2) and (t >= obs["t"]):
             probas[t, obs["i"], :] = [0, 0, 1]  # p_i^R = 1
+
+def reset_messages(t, kappa, P_bar, phi, P_bar_vec, phi_vec, observations):
+    """
+    Reset kappa, P_bar, phi, P_bar_vec, phi_vec according to observations
+    - observations = list of dict(i=i, s=s, t=t) observations at t_obs=t
+    If s=I, the observation must also give t_I the infection time
+    """
+    for obs in observations:
+        if (obs["s"] == 0) and (t <= obs["t"]):
+            fill_csr(kappa, obs["i"], 0)  # p_i^S = 1
+            fill_csr(P_bar, obs["i"], 0)
+            fill_csr(phi, obs["i"], 0)
+            P_bar_vec[obs["i"]] = 0
+            phi_vec[obs["i"]] = 0
+        if (obs["s"] == 1) and (obs["t_I"] <= t) and (t <= obs["t"]):
+            fill_csr(kappa, obs["i"], 0)  # p_i^I = 1
+            fill_csr(P_bar, obs["i"], 1)
+            fill_csr(phi, obs["i"], 0)
+            P_bar_vec[obs["i"]] = 1
+            phi_vec[obs["i"]] = 0
+        if (obs["s"] == 2) and (t >= obs["t"]):
+            fill_csr(P_bar, obs["i"], 1)  # p_i^R = 1
+            P_bar_vec[obs["i"]] = 1
 
 
 class BaseInference():
@@ -257,6 +290,9 @@ class DynamicMessagePassing(BaseInference):
             if print_every and (t % print_every == 0):
                 print(f"t = {t} / {T}")
             reset_probas(t, probas, observations)
+            reset_messages(
+                t, kappa, P_bar, phi, P_bar_vec, phi_vec, observations
+            )
             if (t >= T-1):
                 break
             # update
