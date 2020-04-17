@@ -158,12 +158,12 @@ def reset_messages(t, kappa, P_bar, phi, P_bar_vec, phi_vec, observations):
             fill_csr(phi, obs["i"], 0)
             P_bar_vec[obs["i"]] = 0
             phi_vec[obs["i"]] = 0
-        if (obs["s"] == 1) and (obs["t_I"] <= t) and (t <= obs["t"]):
+        if (obs["s"] == 1) and (t == obs["t_I"]):
             fill_csr(kappa, obs["i"], 0)  # p_i^I = 1
             fill_csr(P_bar, obs["i"], 1)
-            fill_csr(phi, obs["i"], 0)
+            fill_csr(phi, obs["i"], 1)
             P_bar_vec[obs["i"]] = 1
-            phi_vec[obs["i"]] = 0
+            phi_vec[obs["i"]] = 1
         if (obs["s"] == 2) and (t >= obs["t"]):
             fill_csr(P_bar, obs["i"], 1)  # p_i^R = 1
             P_bar_vec[obs["i"]] = 1
