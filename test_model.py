@@ -2,7 +2,14 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from time import time
-from .sir_model import indicator
+
+
+def indicator(states):
+    probas = np.zeros(states.shape + (3,))
+    for s in [0,1,2]:
+        probas[..., s] = (states==s)*1
+    assert np.all(probas.argmax(axis = -1) == states)
+    return probas
 
 
 def compute_averages(model, infer, n_run, times):

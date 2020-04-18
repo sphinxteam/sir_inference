@@ -80,7 +80,7 @@ def update_dmp(history, kappa, P_bar, phi,
     da = dL.dot(ones)
     rho_vec = -np.expm1(da)
     # infection messages
-    dA = history_next.multiply(da) - dL                         # ij = t or < t
+    dA = history_next.multiply(da) - dL.transpose()             # ij = t or < t
     rho = dA.expm1().multiply(-1)                               # ij = t or < t
     # update P_bar and phi
     delta_P_bar = rho - rho.multiply(P_bar_all)                 # ij = t or < t
@@ -165,7 +165,7 @@ def reset_messages(t, kappa, P_bar, phi, P_bar_vec, phi_vec, observations):
             j = obs["i"]
             i_s, j_s = phi.nonzero()
             for i in i_s[j_s == j]:
-                phi[i, j] = 1 - kappa[i,  j]
+                phi[i, j] = 1 - kappa[i, j]
         if (obs["s"] == 2) and (t >= obs["t"]):
             fill_csr(P_bar, obs["i"], 1)
             fill_csr(phi, obs["i"], 0)
