@@ -153,20 +153,24 @@ def reset_messages(t, kappa, P_bar, phi, P_bar_vec, phi_vec, observations):
     """
     for obs in observations:
         if (obs["s"] == 0) and (t <= obs["t"]):
-            fill_csr(kappa, obs["i"], 0)  # p_i^S = 1
+            fill_csr(kappa, obs["i"], 0)
             fill_csr(P_bar, obs["i"], 0)
             fill_csr(phi, obs["i"], 0)
             P_bar_vec[obs["i"]] = 0
             phi_vec[obs["i"]] = 0
-        if (obs["s"] == 1) and (t == obs["t_I"]):
-            fill_csr(kappa, obs["i"], 0)  # p_i^I = 1
+        if (obs["s"] == 1) and (obs["t_I"]<= t) and (t <= obs["t"]):
             fill_csr(P_bar, obs["i"], 1)
-            fill_csr(phi, obs["i"], 1)
             P_bar_vec[obs["i"]] = 1
-            phi_vec[obs["i"]] = 1
+            # set phi = theta = 1 - kappa
+            j = obs["i"]
+            i_s, j_s = phi.nonzero()
+            for i in i_s[j_s == j]:
+                phi[i, j] = 1 - kappa[i,  j]
         if (obs["s"] == 2) and (t >= obs["t"]):
-            fill_csr(P_bar, obs["i"], 1)  # p_i^R = 1
+            fill_csr(P_bar, obs["i"], 1)
+            fill_csr(phi, obs["i"], 0)
             P_bar_vec[obs["i"]] = 1
+            phi_vec[obs["i"]] = 0
 
 
 class BaseInference():
