@@ -20,8 +20,6 @@ def compute_averages(model, infer, n_run, times):
     - n_run : number of Monte Carlo runs
     - times : times at which to look at
     """
-    # random initial states
-    model.initial_states = np.random.randint(3, size=model.N)
     # complete observation of the initial states
     infer.initial_probas = indicator(model.initial_states)
     # storage, states (as indicator) and probas
