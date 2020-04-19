@@ -37,8 +37,7 @@ def fill_csr(A, j, value):
     A[:, j] = a
 
 
-def update_dmp(history, kappa, P_bar, phi,
-               P_bar_vec, phi_vec, probas, transmissions, recover_probas):
+def update_dmp(history, kappa, P_bar, phi, probas, transmissions, recover_probas):
     """
     Parameters
     ----------
@@ -46,8 +45,6 @@ def update_dmp(history, kappa, P_bar, phi,
     - kappa = csr sparse matrix of i, j, kappa_ij(t)
     - P_bar = csr sparse matrix of i, j, P_bar_ij(t)
     - phi = csr sparse matrix of i, j, phi_ij(t)
-    - P_bar_vec[j] = P_bar^j(t) = 1 - P_S^j(t)
-    - phi_vec[j] = phi^j(t)
     - probas[j,s] = P_s^j(t)
 
     - transmissions = csr sparse matrix of i, j, lambda_ij(t)
@@ -59,10 +56,11 @@ def update_dmp(history, kappa, P_bar, phi,
     - kappa_next = csr sparse matrix of i, j, kappa_ij(t+1)
     - P_bar_next = csr sparse matrix of i, j, P_bar_ij(t+1)
     - phi_next = csr sparse matrix of i, j, phi_ij(t+1)
-    - P_bar_vec_next[j] = P_bar^j(t+1) = 1 - P_S^j(t+1)
-    - phi_vec_next[j] = phi^j(t+1)
     - probas_next[j,s] = P_s^j(t+1)
     """
+    # phi^j(t) = P_I^j(t) and P_bar^j(t) = 1 -  P_S^j(t)
+    phi_vec = probas[:, 1]
+    P_bar_vec = 1 - probas[:, 0]
     # deal with contacts
     contacts = (transmissions != 0)                             # ij = t
     history_next = contacts.maximum(history)                    # ij = t or < t
@@ -89,20 +87,9 @@ def update_dmp(history, kappa, P_bar, phi,
         (phi_all - phi_all.multiply(transmissions)).multiply(1 - recover_probas)
         + delta_P_bar
     )
-    # update vectors
-    delta_P_bar_vec = rho_vec*(1 - P_bar_vec)
-    P_bar_vec_next = P_bar_vec + delta_P_bar_vec
-    phi_vec_next = phi_vec*(1 - recover_probas) + delta_P_bar_vec
     # update probas
     probas_next = propagate(probas, rho_vec, recover_probas)
-    # sanity check
-    assert np.allclose(P_bar_vec, 1 - probas[:, 0])
-    assert np.allclose(P_bar_vec_next, 1 - probas_next[:, 0])
-    return (
-        history_next,
-        kappa_next, P_bar_next, phi_next,
-        P_bar_vec_next, phi_vec_next, probas_next
-    )
+    return history_next, kappa_next, P_bar_next, phi_next, probas_next
 
 
 ############### Mean field ##############################
@@ -156,11 +143,8 @@ def reset_messages(t, kappa, P_bar, phi, P_bar_vec, phi_vec, observations):
             fill_csr(kappa, obs["i"], 0)
             fill_csr(P_bar, obs["i"], 0)
             fill_csr(phi, obs["i"], 0)
-            P_bar_vec[obs["i"]] = 0
-            phi_vec[obs["i"]] = 0
         if (obs["s"] == 1) and (obs["t_I"]<= t) and (t <= obs["t"]):
             fill_csr(P_bar, obs["i"], 1)
-            P_bar_vec[obs["i"]] = 1
             # set phi = theta = 1 - kappa
             j = obs["i"]
             i_s, j_s = phi.nonzero()
@@ -169,8 +153,6 @@ def reset_messages(t, kappa, P_bar, phi, P_bar_vec, phi_vec, observations):
         if (obs["s"] == 2) and (t >= obs["t"]):
             fill_csr(P_bar, obs["i"], 1)
             fill_csr(phi, obs["i"], 0)
-            P_bar_vec[obs["i"]] = 1
-            phi_vec[obs["i"]] = 0
 
 
 class BaseInference():
@@ -300,19 +282,16 @@ class DynamicMessagePassing(BaseInference):
             if (t >= T-1):
                 break
             # update
-            new = update_dmp(
-                history, kappa, P_bar, phi, P_bar_vec, phi_vec, probas[t],
+            history, kappa, P_bar, phi, probas[t+1] = update_dmp(
+                history, kappa, P_bar, phi, probas[t],
                 transmissions[t], recover_probas
             )
-            history, kappa, P_bar, phi, P_bar_vec, phi_vec, probas[t+1] = new
             # DEBUG : record info
             records.append(infos_csr(t, "transmissions", transmissions[t]))
             records.append(infos_csr(t, "history", history))
             records.append(infos_csr(t, "kappa", kappa))
             records.append(infos_csr(t, "P_bar", P_bar))
             records.append(infos_csr(t, "phi", phi))
-            records.append(infos_array(t, "P_bar_vec", P_bar_vec))
-            records.append(infos_array(t, "phi_vec", phi_vec))
             records.append(infos_array(t, "probas", probas[t]))
         self.records = pd.DataFrame(records)  # DEBUG
         self.probas = probas
