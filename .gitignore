@@ -9,6 +9,6 @@ __pycache__/
 .ipynb_checkpoints
 
 # data
-data/
+data*
 *.png
 *.zip

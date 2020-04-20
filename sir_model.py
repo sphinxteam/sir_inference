@@ -16,6 +16,64 @@ def indicator(states):
     assert np.all(probas.argmax(axis = -1) == states)
     return probas
 
+def frequency(states, verbose=True):
+    "Generate initial proba according to the frequencies of states"
+    freqs = [np.mean(states==s) for s in [0,1,2]]
+    if verbose:
+        print("freqs = ", freqs)
+    N = len(states)
+    initial_probas = np.broadcast_to(freqs, (N, 3)).copy()
+    return initial_probas
+
+
+def patient_zeros_states(N, N_patient_zero):
+    states = np.zeros(N)
+    patient_zero = np.random.choice(N, N_patient_zero, replace=False)
+    states[patient_zero] = 1
+    return states
+
+
+def random_observations(model, tests):
+    """
+    Observations given by random sampling of the population.
+
+    Parameters
+    ----------
+    - model : EpidemicModel instance to gives the states
+    - tests : dict
+        n_test = tests[t_test] number of random tests done at t=t_test
+
+    Returns
+    -------
+    - observations : list of dict(i=i, s=s, t_test=t_test) observations
+    """
+    observations = []
+    for t_test, n_test in tests.items():
+        tested = np.random.choice(model.N, n_test, replace=False)
+        for i in tested:
+            obs = dict(i=i, t_test=t_test, s=model.states[t_test, i])
+            observations.append(obs)
+    return observations
+
+def infected_observations(model, t_test, n_test):
+    """
+    Observations corresponding to n_test infected individuals at t=t_test.
+
+    Parameters
+    ----------
+    - model : EpidemicModel instance to gives the states
+    - t_test : int
+    - n_test : int
+
+    Returns
+    -------
+    - observations : list of dict(i=i, s=s, t_test=t_test) observations
+    """
+    infected, = np.where(model.states[t_test,:] == 1)
+    infected = infected[:n_test]
+    observations = [dict(i=i, t_test=t_test, s=1) for i in infected]
+    return observations
+
 
 def get_infection_probas(states, transmissions):
     """
