@@ -132,6 +132,60 @@ def reset_probas(t, probas, observations):
         if (obs["s"] == 2) and (t >= obs["t"]):
             probas[t, obs["i"], :] = [0, 0, 1]  # p_i^R = 1
 
+
+def sum_transmissions(i, t_min, t_max, transmissions):
+    """
+    Computes L[k] = sum_{t' in [t_min, t_max]} lambda_ik(t')
+    for k contact of i during [t_min, t_max]
+    """
+    t_min = max(t_min, 0)
+    sum_transmission = sum(
+        transmissions[t] for t in range(t_min, t_max + 1)
+    )
+    L = sum_transmission.getrow(i)
+    return L
+
+
+def reset_being_infected_by_others(t, probas, observations):
+    """
+    Reset probas[t] according to observations by the "being infected by others"
+    rule.
+    - observations = list of dict(i=i, t_min=t_min, t_max=t_max, L=L) where:
+        - i is detected s=I at t=t_obs
+        - t_min = t_obs - tau_1
+        - t_max = t_obs - tau_2
+        - L[k] = sum_{t_min<=t<=t_max} lambda_ik(t)
+        for k contact of i during [t_min, t_max]
+    - probas[t, i, s] = P_s^i(t)
+    """
+    for obs in observations:
+        if (obs["t_min"] <= t) and (t <= obs["t_max"]):
+            # p = p_I^j(t)
+            p = probas[t,:,1]
+            # sum_p = sum_{k in V} P_I^k(t) L_k where
+            # V = contacts of i during [t_min, t_max] = obs["L"].indices
+            # L[k] = sum_{t' in [t_min, t_max]} lambda_ik(t') = obs["L"]
+            V = obs["L"].indices
+            sum_p = obs["L"].dot(p)[0]
+            # ensures that 0 < sum_p <= 1
+            sum_p = min(sum_p, 1)
+            sum_p = max(sum_p, 1e-11)
+            # compute p_new = new p_I^j(t) where
+            # p_new[j] = p[j] /sum_p for j in V
+            p_new =  p.copy()
+            p_new[V] = p[V] / sum_p
+            # ensures that p_new <= 1
+            p_new = np.minimum(p_new, 1)
+            # ensures that sum_s p_s^j(t) = 1
+            alpha = np.ones_like(p)
+            ind = (p < 1)
+            alpha[ind] = (1 - p_new[ind]) / (1 - p[ind])
+            # reset
+            probas[t,:,0] = alpha*probas[t,:,0]
+            probas[t,:,1] = p_new
+            probas[t,:,2] = alpha*probas[t,:,2]
+
+
 def reset_messages(t, kappa, P_bar, phi, P_bar_vec, phi_vec, observations):
     """
     Reset kappa, P_bar, phi, P_bar_vec, phi_vec according to observations
@@ -224,18 +278,31 @@ class MeanField(BaseInference):
         - recover_probas[i] = mu_i time-independent
         - transmissions[t] = csr sparse matrix of i, j, lambda_ij(t)
         - observations = list of dict(i=i, s=s, t=t) observations at t_obs=t
-        If s=I, the observation must also give t_I the infection time
+        If s=I the observation must also give
+            - t_I the infection time
+            - being_infected : use or not the "being infected by others" rule
+            - t_min, t_max (if being_infected = True)
         - probas[t, i, s] = P_s^i(t)
         """
         # initialize states
         T = len(transmissions)
         probas = np.zeros((T + 1, self.N, 3))
         probas[0] = self.initial_probas
+        # observations with the being_infected flag
+        being_infected = [
+            obs for obs in observations
+            if obs.get("being_infected") and obs["s"]==1
+        ]
+        for obs in being_infected:
+            obs["L"] = sum_transmissions(
+                obs["i"], obs["t_min"], obs["t_max"], transmissions
+            )
         # iterate over time steps
         for t in range(T):
             if print_every and (t % print_every == 0):
                 print(f"t = {t} / {T}")
             reset_probas(t, probas, observations)
+            reset_being_infected_by_others(t, probas, being_infected)
             infection_probas = get_infection_probas_mean_field(
                 probas[t], transmissions[t]
             )
