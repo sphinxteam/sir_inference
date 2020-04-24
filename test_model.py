@@ -12,17 +12,16 @@ def indicator(states):
     return probas
 
 
-def compute_averages(model, infer, n_run, times):
+def compute_averages(model, n_run, times,fname=None):
     """
     Computes the Monte Carlo frequencies and average estimated probabilites.
     - model : EpidemicModel instance to generate the SIR simulation
     - infer : BaseInference instance to estimate the probabilites
     - n_run : number of Monte Carlo runs
     - times : times at which to look at
+    - fname : if given saves the average states in a .p file with pickle
     """
-    # complete observation of the initial states
-    infer.initial_probas = indicator(model.initial_states)
-    # storage, states (as indicator) and probas
+    
     n_times = len(times)
     t_runs = np.zeros(n_run)
     states = np.zeros((n_run, n_times, model.N, 3))
@@ -34,42 +33,64 @@ def compute_averages(model, infer, n_run, times):
         model.run(t_max, print_every=0)
         states[n] = indicator(model.states[times])
         tic = time()
-        infer.time_evolution(model.recover_probas, model.transmissions, print_every=0)
         t_runs[n] = time() - tic
-        probas[n] = infer.probas[times]
+        
     print(
         f"run times from {t_runs.min():.1e}s to {t_runs.max():.1e}s "
         f"median {np.median(t_runs):.1e}s"
     )
     # <.> over monte carlo runs
     avg_states = states.mean(axis=0) # avg_states[t,i,s] = < q_i(t) == s >
-    avg_probas = probas.mean(axis=0) # avg_probas[t,i,s] = < p_i^s[t] >
-    return avg_states, avg_probas
+    if fname is not None:
+        pickle.dump( avg_states, open( fname+'_avg_states.p', "wb" ) )
+    return avg_states
 
 
-def generate_scatterplot(model, infer, n_run, times):
+def generate_scatterplot(model, infer, n_run, times,axs=None,fname=None):
     """
     Scatterplot of the Monte Carlo frequencies vs the estimated probabilites.
     - model : EpidemicModel instance to generate the SIR simulation
     - infer : BaseInference instance to estimate the probabilites
     - n_run : number of Monte Carlo runs
     - times : times at which to look at
+    - fname : if given saves the average states in a .p file with pickle
     """
-    avg_states, avg_probas = compute_averages(model, infer, n_run, times)
+    avg_states = compute_averages(model, n_run, times,fname=fname)
     n_times = len(times)
+    
+    infer.initial_probas = indicator(model.initial_states)
+    infer.time_evolution(model.recover_probas, model.transmissions, print_every=0)
+    probas = infer.probas[times]
+    
     # scatterplot
     STATES = "SIR"
-    fig, axs = plt.subplots(
-        n_times, 3, figsize=(4*3, 4*n_times),
-        sharex=True, sharey=True, squeeze=False
-    )
-    for t, row in enumerate(axs):
-        for s, ax in enumerate(row):
-            ax.plot([0, 1], [0, 1])
-            ax.scatter(avg_probas[t, :, s], avg_states[t, :, s])
-            ax.set(
-                xlabel="average $P_s^i(t)$",
-                ylabel="frequency of $q_i(t) = s$",
-                title=f"{STATES[s]}    t={times[t]}", xlim=(0, 1), ylim=(0, 1)
-            )
-    fig.tight_layout()
+    if axs is None:
+        fig, axs = plt.subplots(
+            n_times, 3, figsize=(4*3, 4*n_times),
+            sharex=True, sharey=True, squeeze=False
+        )
+        
+    if n_times>1:
+        for t, row in enumerate(axs):
+            for s, ax in enumerate(row):
+                p=ax.plot([0, 1], [0, 1])
+                p=ax.scatter(probas[t, :, s], avg_states[t, :, s])
+                ax.set(
+                    xlabel="average $P_s^i(t)$",
+                    ylabel="frequency of $q_i(t) = s$",
+                    title=f"{STATES[s]}    t={times[t]}", xlim=(0, 1), ylim=(0, 1)
+                )
+    else:
+        if n_times==1:
+            t=0
+            for s, ax in enumerate(axs):
+                p=ax.plot([0, 1], [0, 1])
+                p=ax.scatter(probas[t, :, s], avg_states[t, :, s])
+                ax.set(
+                    xlabel="average $P_s^i(t)$",
+                    ylabel="frequency of $q_i(t) = s$",
+                    title=f"{STATES[s]}    t={times[t]}", xlim=(0, 1), ylim=(0, 1)
+                )
+    if axs is None:
+        fig.tight_layout()
+    return p
