@@ -33,6 +33,21 @@ def patient_zeros_states(N, N_patient_zero):
     return states
 
 
+def random_individuals(model, n_obs):
+    return np.random.choice(model.N, n_obs, replace=False)
+
+
+def infected_individuals(model, t, n_obs):
+    infected, = np.where(model.states[t,:] == 1)
+    if len(infected) < n_obs:
+        print(
+            f"WARNING only {len(infected)} infected at t={t} "
+            f"cannot return n_obs={n_obs} observations"
+        )
+        return infected
+    return np.random.choice(infected, n_obs, replace=False)
+
+
 def random_observations(model, tests):
     """
     Observations given by random sampling of the population.
@@ -49,11 +64,12 @@ def random_observations(model, tests):
     """
     observations = []
     for t_test, n_test in tests.items():
-        tested = np.random.choice(model.N, n_test, replace=False)
+        tested = random_individuals(model, n_test)
         for i in tested:
             obs = dict(i=i, t_test=t_test, s=model.states[t_test, i])
             observations.append(obs)
     return observations
+
 
 def infected_observations(model, t_test, n_test):
     """
@@ -69,8 +85,7 @@ def infected_observations(model, t_test, n_test):
     -------
     - observations : list of dict(i=i, s=s, t_test=t_test) observations
     """
-    infected, = np.where(model.states[t_test,:] == 1)
-    infected = infected[:n_test]
+    infected = infected_individuals(model, t_test, n_test)
     observations = [dict(i=i, t_test=t_test, s=1) for i in infected]
     return observations
 
@@ -137,6 +152,8 @@ class EpidemicModel():
             states[t+1] = propagate(states[t], infection_probas, recover_probas)
         self.states = states
         self.probas = indicator(states)
+        self.recover_probas = recover_probas
+        self.transmissions = transmissions
 
     def plot(self, t):
         fig, ax = plt.subplots(1, 1, figsize = (5,5))
