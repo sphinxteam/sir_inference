@@ -99,7 +99,7 @@ def ranking_inference(t, model, observations, params):
     probas["i"] = range(model.N)
     probas = probas.sort_values(by="p_I", ascending=False)
     ranked = list(probas["i"])
-    return ranked
+    return ranked, probas.p_I
 
 
 def ranking_inference_backtrack(t, model, observations, params):
@@ -136,13 +136,16 @@ def ranking_inference_backtrack(t, model, observations, params):
     probas["i"] = range(model.N)
     probas = probas.sort_values(by="p_I", ascending=False)
     ranked = list(probas["i"])
-    return ranked
+    return ranked, probas.p_I
 
 
 def ranking_random(t, model, observations, params):
     """Returns a random ranking."""
     ranked = np.random.permutation(model.N)
-    return ranked
+
+    encounters = pd.DataFrame({"count": range(model.N)})
+    encounters["count"] = np.ones(model.N)
+    return ranked, encounters["count"]
 
 
 def ranking_tracing(t, model, observations, params):
@@ -168,7 +171,10 @@ def ranking_tracing(t, model, observations, params):
     )
     no_contact = contacts.shape[0] == 0
     if no_contact:
-        return np.random.permutation(model.N)
+        encounters = pd.DataFrame({"count": range(model.N)})
+        encounters["count"] = np.ones(model.N)
+        return np.random.permutation(model.N), encounters["count"]
+    
     # number of encounters for all i
     counts = contacts.groupby("i").size()
     encounters = pd.DataFrame({"i": range(model.N)})
@@ -176,7 +182,9 @@ def ranking_tracing(t, model, observations, params):
     encounters["count"] = encounters["i"].map(counts).fillna(0)
     encounters = encounters.sort_values(by="count", ascending=False)
     ranked = list(encounters["i"])
-    return ranked
+    
+    encounters["count"] = encounters["count"]/encounters["count"].max()
+    return ranked, encounters["count"]
 
 
 RANKINGS = {
@@ -202,7 +210,7 @@ def run_observations(initial_obs, model, params):
         # ranking
         if use_ranking:
             # list of people to test
-            ranked = ranking(t, model, observations, params)
+            ranked, _ = ranking(t, model, observations, params)
             already_detected = set(
                 obs["i"] for obs in observations if obs["s"] == 1
             )
@@ -236,7 +244,9 @@ def ranking_observations(t, model, past_observations, params):
     ranking_name = params["ranking"]
     ranking = RANKINGS[ranking_name]
     # list of people to test
-    ranked = ranking(t, model, past_observations, params)
+    ranked, probasI = ranking(t, model, past_observations, params)
+#     print("\nNOW!\n\n")
+#     display(probasI)
     already_detected = set(
         obs["i"] for obs in past_observations if obs["s"] == 1
     )
@@ -249,7 +259,7 @@ def ranking_observations(t, model, past_observations, params):
     df["detected"] = df["s"] == 1
     df = df.sort_values(by="rank")
     df["total_detected"] = df["detected"].cumsum()
-    return df
+    return df, probasI
 
 
 def get_detected(observations):
