@@ -5,8 +5,8 @@ from scipy.sparse import csr_matrix, coo_matrix
 from ipywidgets import interact, IntSlider
 
 # sir_inference imports
-from sir_inference.inference_model import MeanField, DynamicMessagePassing
-from sir_inference.sir_model import (
+from .inference_model import MeanField, DynamicMessagePassing
+from .sir_model import (
     EpidemicModel, ProximityModel, 
     patient_zeros_states, frequency, indicator,
     random_individuals, infected_individuals,
