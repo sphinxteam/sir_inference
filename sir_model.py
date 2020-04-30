@@ -2,17 +2,12 @@ import numpy as np
 import pandas as pd
 import networkx as nx
 import matplotlib.pyplot as plt
-from scipy.sparse import coo_matrix
+from scipy.sparse import coo_matrix, csr_matrix
 from scipy.spatial.distance import pdist, squareform
 import logging
 logger = logging.getLogger(__name__)
 
 STATES = ["S", "I", "R"]
-
-
-def csr_to_list(x):
-    x_coo = x.tocoo()
-    return zip(x_coo.row, x_coo.col, x_coo.data)
 
 
 def indicator(states):
