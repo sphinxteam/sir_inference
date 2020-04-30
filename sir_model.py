@@ -314,3 +314,43 @@ class NetworkModel(EpidemicModel):
         assert len(contacts) == transmissions.nnz
         assert np.all(i != j)
         return transmissions
+
+
+def read_ferretti_data(csv_file, lamb):
+    N = 10000
+    df = pd.read_csv(csv_file)
+    assert N-1 == df["ID"].max() == df["ID_2"].max()
+    tmax = df["time"].max()
+    transmissions = []
+    for t in range(tmax):
+        sub_data = df.query(f"time=={t}")
+        i, j = sub_data["ID"], sub_data["ID_2"]
+        rates = lamb*np.ones_like(i)
+        transmissions.append(
+            csr_matrix((rates, (i, j)), shape=(N, N))
+        )
+    return transmissions
+
+
+def proximity_model(N, N_patient_zero, scale, mu, lamb, t_max, seed):
+    print("Using ProximityModel")
+    np.random.seed(seed)
+    initial_states = patient_zeros_states(N, N_patient_zero)
+    model = ProximityModel(N, scale, mu, lamb, initial_states)
+    print("expected number of contacts %.1f" % model.n_contacts)
+    model.run(t_max, print_every=100)
+    return model
+
+
+def ferretti_model(N_patient_zero=10, mu=1/15, lamb=0.02, seed=123):
+    print("Using Ferretti transmissions")
+    N = 10000
+    transmissions = read_ferretti_data("all_interaction_10000.csv", lamb=lamb)
+    initial_states = patient_zeros_states(N, N_patient_zero)
+    # random x_pos, y_pos
+    x_pos = np.random.rand(N)
+    y_pos = np.random.rand(N)
+    model = EpidemicModel(initial_states=initial_states, x_pos=x_pos, y_pos=y_pos)
+    recover_probas = mu*np.ones(N)
+    model.time_evolution(recover_probas, transmissions, print_every=100)
+    return model

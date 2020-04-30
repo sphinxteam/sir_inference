@@ -272,7 +272,7 @@ class Scenario():
     def detected_curve(self, t, exclude=True):
         "If exclude = True we exclude already detected from the detected curve"
         merged = self.compare_scores_status(t, exclude)
-        merged = merged.sort_values(by="score", ascending=False)
+        merged = merged.sort_values(by="rank")
         detected = merged["infected"].cumsum().values
         tested = 1 + np.arange(len(detected))
         return tested, detected

@@ -1,188 +1,9 @@
+"""Deprecated use the Scenario class instead."""
+
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
-from scipy.sparse import csr_matrix, coo_matrix
-from ipywidgets import interact, IntSlider
-
-# sir_inference imports
-from inference_model import MeanField, DynamicMessagePassing
-from sir_model import (
-    EpidemicModel, ProximityModel,
-    patient_zeros_states, frequency, indicator,
-    random_individuals, infected_individuals,
-)
-
-
-def read_ferretti_data(csv_file, lamb):
-    N = 10000
-    df = pd.read_csv(csv_file)
-    assert N-1 == df["ID"].max() == df["ID_2"].max()
-    tmax = df["time"].max()
-    transmissions = []
-    for t in range(tmax):
-        sub_data = df.query(f"time=={t}")
-        i, j = sub_data["ID"], sub_data["ID_2"]
-        rates = lamb*np.ones_like(i)
-        transmissions.append(
-            csr_matrix((rates, (i, j)), shape=(N, N))
-        )
-    return transmissions
-
-
-def proximity_model(N, N_patient_zero, scale, mu, lamb, seed=42):
-    print("Using ProximityModel")
-    np.random.seed(seed)
-    initial_states = patient_zeros_states(N, N_patient_zero)
-    model = ProximityModel(N, scale, mu, lamb, initial_states)
-    print("expected number of contacts %.1f" % model.n_contacts)
-    model.run(T=50, print_every=100)
-    return model
-
-
-def ferretti_model(N_patient_zero=10, mu=1/15, lamb=0.02):
-    print("Using Ferretti transmissions")
-    N = 10000
-    transmissions = read_ferretti_data("all_interaction_10000.csv", lamb=lamb)
-    initial_states = patient_zeros_states(N, N_patient_zero)
-    # random x_pos, y_pos
-    x_pos = np.random.rand(N)
-    y_pos = np.random.rand(N)
-    model = EpidemicModel(initial_states=initial_states, x_pos=x_pos, y_pos=y_pos)
-    recover_probas = mu*np.ones(N)
-    model.time_evolution(recover_probas, transmissions, print_every=100)
-    return model
-
-
-def csr_to_list(x):
-    x_coo = x.tocoo()
-    return zip(x_coo.row, x_coo.col, x_coo.data)
-
-
-def ranking_inference(t, model, observations, params):
-    """Inference starting from t_start.
-
-    Run Mean Field from t_start to t, starting from all susceptible and
-    resetting the probas according to observations. The time of infection is given
-
-    params["t_start"] : t_start
-    params["tau"] : tau
-    params["algo"] : "MF" (Mean Field) or "DMP" (Dynamic Message Passing)
-    params["init"] : "all_S" (all susceptible) or "freqs" (frequency at t_start)
-    """
-    t_start = params["t_start"]
-    tau = params["tau"]
-    algo = MeanField if params["algo"] == "MF" else DynamicMessagePassing
-    if params["init"] == "all_S":
-        initial_probas = indicator(np.zeros(model.N))
-    else:
-        initial_probas = frequency(model.states[t_start])
-    infer = algo(initial_probas, model.x_pos, model.y_pos)
-    # shift by t_start
-    for obs in observations:
-        obs["t"] = obs["t_test"] - t_start
-        obs["t_I"] = obs["t"] - tau
-    infer.time_evolution(
-        model.recover_probas, model.transmissions[t_start:t+1], observations,
-        print_every=0
-    )
-    probas = pd.DataFrame(
-        infer.probas[t-t_start, :, :],
-        columns=["p_S", "p_I", "p_R"]
-    )
-    probas["i"] = range(model.N)
-    probas = probas.sort_values(by="p_I", ascending=False)
-    ranked = list(probas["i"])
-    return ranked, probas.p_I
-
-
-def ranking_inference_backtrack(t, model, observations, params):
-    """Mean Field starting from t - delta.
-
-    Run Mean Field from t - delta to t, starting from all susceptible and
-    resetting the probas according to observations.
-
-    params["delta"] : delta
-    params["tau"] : tau
-    params["algo"] : "MF" (Mean Field) or "DMP" (Dynamic Message Passing)
-    params["init"] : "all_S" (all susceptible) or "freqs" (frequency at t_start)
-    """
-    t_start = t - params["delta"]
-    tau = params["tau"]
-    algo = MeanField if params["algo"] == "MF" else DynamicMessagePassing
-    if params["init"] == "all_S":
-        initial_probas = indicator(np.zeros(model.N))
-    else:
-        initial_probas = frequency(model.states[t_start])
-    infer = algo(initial_probas, model.x_pos, model.y_pos)
-    # shift by t_start
-    for obs in observations:
-        obs["t"] = obs["t_test"] - t_start
-        obs["t_I"] = obs["t"] - tau
-    infer.time_evolution(
-        model.recover_probas, model.transmissions[t_start:t+1], observations,
-        print_every=0
-    )
-    probas = pd.DataFrame(
-        infer.probas[t-t_start, :, :],
-        columns=["p_S", "p_I", "p_R"]
-    )
-    probas["i"] = range(model.N)
-    probas = probas.sort_values(by="p_I", ascending=False)
-    ranked = list(probas["i"])
-    return ranked, probas.p_I
-
-
-def ranking_random(t, model, observations, params):
-    """Returns a random ranking."""
-    ranked = np.random.permutation(model.N)
-    encounters = pd.DataFrame({"count": range(model.N)})
-    encounters["count"] = np.ones(model.N)
-    return ranked, encounters["count"]
-
-
-def ranking_tracing(t, model, observations, params):
-    """Naive contact tracing.
-
-    Search for all individuals that have been in contact during [t-delta, t]
-    with the individuals last tested positive (observations s=I at t_test=t-1).
-
-    params["delta"] = delta
-    """
-    delta = params["delta"]
-    # last_tested : observations s=I at t_test=t-1
-    last_tested = set(
-        obs["i"] for obs in observations
-        if obs["s"] == 1 and obs["t_test"] == t-1
-    )
-    # contacts with last_tested people during [t - delta, t]
-    contacts = pd.DataFrame(
-        dict(i=i, j=j, t=t_contact)
-        for t_contact in range(t - delta, t)
-        for i, j, _ in csr_to_list(model.transmissions[t_contact])
-        if j in last_tested
-    )
-    no_contact = contacts.shape[0] == 0
-    if no_contact:
-        encounters = pd.DataFrame({"count": range(model.N)})
-        encounters["count"] = np.ones(model.N)
-        return np.random.permutation(model.N), encounters["count"]
-    # number of encounters for all i
-    counts = contacts.groupby("i").size()
-    encounters = pd.DataFrame({"i": range(model.N)})
-    # if i has no encounters with last_tested people, count is zero
-    encounters["count"] = encounters["i"].map(counts).fillna(0)
-    encounters = encounters.sort_values(by="count", ascending=False)
-    ranked = list(encounters["i"])
-    encounters["count"] = encounters["count"]/encounters["count"].max()
-    return ranked, encounters["count"]
-
-
-RANKINGS = {
-    "inference": ranking_inference,
-    "backtrack": ranking_inference_backtrack,
-    "tracing": ranking_tracing,
-    "random": ranking_random
-}
+from sir_model import random_individuals, infected_individuals
+from ranking import RANKINGS
 
 
 def run_observations(initial_obs, model, params):
@@ -198,7 +19,8 @@ def run_observations(initial_obs, model, params):
         # ranking
         if use_ranking:
             # list of people to test
-            ranked, _ = ranking(t, model, observations, params)
+            scores = ranking(t, model, observations, params)
+            ranked = scores["i"].values
             already_detected = set(
                 obs["i"] for obs in observations if obs["s"] == 1
             )
@@ -233,30 +55,21 @@ def run_observations(initial_obs, model, params):
 def ranking_observations(t, model, past_observations, params):
     ranking_name = params["ranking"]
     ranking = RANKINGS[ranking_name]
-    # list of people to test
-    ranked, probasI = ranking(t, model, past_observations, params)
+    # merge scores wih actual states
+    scores = ranking(t, model, past_observations, params)
+    status = pd.DataFrame({
+        "i":range(model.N), "s":model.states[t, :]
+    })
+    scores = pd.merge(scores, status, on="i", how="inner")
+    assert scores.shape[0]==model.N
+    # exclude already detected
     already_detected = set(
         obs["i"] for obs in past_observations if obs["s"] == 1
     )
-    selected = [i for i in ranked if i not in already_detected]
-    observations = [
-        dict(i=i, s=model.states[t, i], t_test=t, source="ranking", rank=rank)
-        for rank, i in enumerate(selected)
-    ]
-    df = pd.DataFrame(observations)
-    df["detected"] = df["s"] == 1
-    df = df.sort_values(by="rank")
-    df["total_detected"] = df["detected"].cumsum()
-    return df, probasI
-
-
-def get_detected(observations):
-    df = pd.DataFrame(observations)
-    df = df.query("source=='ranking'").copy()
-    df["detected"] = df["s"] == 1
-    df["tested"] = 1
-    grouped = df.groupby("t_test")[["detected", "tested"]].sum()
-    grouped = grouped.reset_index().sort_values(by="t_test")
-    grouped["total_detected"] = grouped["detected"].cumsum()
-    grouped["total_tested"] = grouped["tested"].cumsum()
-    return grouped
+    scores = scores[~scores["i"].isin(already_detected)]
+    # rerank
+    scores = scores.sort_values(by="rank")
+    scores["infected"] = scores["s"] == 1
+    scores["tested"] = 1 + np.arange(scores.shape[0])
+    scores["detected"] = scores["infected"].cumsum()
+    return scores
