@@ -2,8 +2,7 @@ import numpy as np
 import pandas as pd
 from scipy.sparse import coo_matrix, csr_matrix
 import matplotlib.pyplot as plt
-
-STATES = ["S", "I", "R"]
+from sir_model import STATES
 
 
 def infos_csr(t, name, array):

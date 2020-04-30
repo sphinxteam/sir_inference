@@ -346,6 +346,7 @@ def proximity_model(N, N_patient_zero, scale, mu, lamb, t_max, seed):
 
 def ferretti_model(N_patient_zero=10, mu=1/15, lamb=0.02, seed=123):
     print("Using Ferretti transmissions")
+    np.random.seed(seed)
     N = 10000
     transmissions = read_ferretti_data("all_interaction_10000.csv", lamb=lamb)
     initial_states = patient_zeros_states(N, N_patient_zero)
