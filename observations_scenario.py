@@ -42,27 +42,20 @@ def proximity_model(N, N_patient_zero, scale, mu, lamb, seed=42):
 def ferretti_model(N_patient_zero=10, mu=1/15, lamb=0.02):
     print("Using Ferretti transmissions")
     N = 10000
-    N_patient_zero = 10
     transmissions = read_ferretti_data("all_interaction_10000.csv", lamb=lamb)
     initial_states = patient_zeros_states(N, N_patient_zero)
     # random x_pos, y_pos
     x_pos = np.random.rand(N)
     y_pos = np.random.rand(N)
     model = EpidemicModel(initial_states=initial_states, x_pos=x_pos, y_pos=y_pos)
-    mu = 1/15
     recover_probas = mu*np.ones(N)
     model.time_evolution(recover_probas, transmissions, print_every=100)
     return model
-
-########################################### Utils ###########################################
-## Ranking ##
 
 
 def csr_to_list(x):
     x_coo = x.tocoo()
     return zip(x_coo.row, x_coo.col, x_coo.data)
-
-# ranking functions
 
 
 def ranking_inference(t, model, observations, params):
@@ -142,7 +135,6 @@ def ranking_inference_backtrack(t, model, observations, params):
 def ranking_random(t, model, observations, params):
     """Returns a random ranking."""
     ranked = np.random.permutation(model.N)
-
     encounters = pd.DataFrame({"count": range(model.N)})
     encounters["count"] = np.ones(model.N)
     return ranked, encounters["count"]
@@ -174,7 +166,6 @@ def ranking_tracing(t, model, observations, params):
         encounters = pd.DataFrame({"count": range(model.N)})
         encounters["count"] = np.ones(model.N)
         return np.random.permutation(model.N), encounters["count"]
-    
     # number of encounters for all i
     counts = contacts.groupby("i").size()
     encounters = pd.DataFrame({"i": range(model.N)})
@@ -182,7 +173,6 @@ def ranking_tracing(t, model, observations, params):
     encounters["count"] = encounters["i"].map(counts).fillna(0)
     encounters = encounters.sort_values(by="count", ascending=False)
     ranked = list(encounters["i"])
-    
     encounters["count"] = encounters["count"]/encounters["count"].max()
     return ranked, encounters["count"]
 
@@ -193,8 +183,6 @@ RANKINGS = {
     "tracing": ranking_tracing,
     "random": ranking_random
 }
-
-## Observations ##
 
 
 def run_observations(initial_obs, model, params):
@@ -221,13 +209,15 @@ def run_observations(initial_obs, model, params):
                 for i in selected
             ]
         # random
-        selected = random_individuals(model, n_obs=params["n_test"]["random"])
+        n_obs = params["n_test"]["random"]
+        selected = random_individuals(model.N, n_obs)
         observations += [
             dict(i=i, s=model.states[t, i], t_test=t, source="random")
             for i in selected
         ]
         # infected
-        selected = infected_individuals(model, t, n_obs=params["n_test"]["infected"])
+        n_obs=params["n_test"]["infected"]
+        selected = infected_individuals(model.states[t], n_obs)
         observations += [
             dict(i=i, s=model.states[t, i], t_test=t, source="infected")
             for i in selected
@@ -245,8 +235,6 @@ def ranking_observations(t, model, past_observations, params):
     ranking = RANKINGS[ranking_name]
     # list of people to test
     ranked, probasI = ranking(t, model, past_observations, params)
-#     print("\nNOW!\n\n")
-#     display(probasI)
     already_detected = set(
         obs["i"] for obs in past_observations if obs["s"] == 1
     )

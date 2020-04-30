@@ -33,15 +33,15 @@ def patient_zeros_states(N, N_patient_zero):
     return states
 
 
-def random_individuals(model, n_obs):
-    return np.random.choice(model.N, n_obs, replace=False)
+def random_individuals(N, n_obs):
+    return np.random.choice(N, n_obs, replace=False)
 
 
-def infected_individuals(model, t, n_obs):
-    infected, = np.where(model.states[t,:] == 1)
+def infected_individuals(states, n_obs):
+    infected, = np.where(states == 1)
     if len(infected) < n_obs:
         print(
-            f"WARNING only {len(infected)} infected at t={t} "
+            f"WARNING only {len(infected)} infected "
             f"cannot return n_obs={n_obs} observations"
         )
         return infected
@@ -64,7 +64,7 @@ def random_observations(model, tests):
     """
     observations = []
     for t_test, n_test in tests.items():
-        tested = random_individuals(model, n_test)
+        tested = random_individuals(model.N, n_test)
         for i in tested:
             obs = dict(i=i, t_test=t_test, s=model.states[t_test, i])
             observations.append(obs)
@@ -85,7 +85,7 @@ def infected_observations(model, t_test, n_test):
     -------
     - observations : list of dict(i=i, s=s, t_test=t_test) observations
     """
-    infected = infected_individuals(model, t_test, n_test)
+    infected = infected_individuals(model.states[t_test], n_test)
     observations = [dict(i=i, t_test=t_test, s=1) for i in infected]
     return observations
 
@@ -141,8 +141,7 @@ class EpidemicModel():
         """
         # initialize states
         T = len(transmissions)
-        states = np.empty((T + 1, self.N))
-        states[:] = np.nan
+        states = np.zeros((T + 1, self.N), dtype=int)
         states[0] = self.initial_states
         # iterate over time steps
         for t in range(T):
