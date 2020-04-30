@@ -9,12 +9,19 @@ logger = logging.getLogger(__name__)
 
 STATES = ["S", "I", "R"]
 
+
+def csr_to_list(x):
+    x_coo = x.tocoo()
+    return zip(x_coo.row, x_coo.col, x_coo.data)
+
+
 def indicator(states):
     probas = np.zeros(states.shape + (3,))
     for s in [0,1,2]:
         probas[..., s] = (states==s)*1
     assert np.all(probas.argmax(axis = -1) == states)
     return probas
+
 
 def frequency(states, verbose=True):
     "Generate initial proba according to the frequencies of states"
