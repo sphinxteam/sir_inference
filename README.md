@@ -1,7 +1,7 @@
-# Probabilistic inference framework for estimatingrisk of infection from proximity tracking data
+# Probabilistic inference framework for estimating risk of infection from proximity tracking data
 
 The method is based on the SIR inference model we describe in [these notes](https://www.overleaf.com/read/tfhcpbvhmcwq
-), where you cna find more information about our approach.
+), where you can find more information about our approach.
 
 Simple demonstration of the package and of the inference procedure can be found on these google colab notebooks:
 
