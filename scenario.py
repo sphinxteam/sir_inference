@@ -20,9 +20,9 @@ def inactivate_transmission(transmission, quarantined):
     return transmission_new
 
 
-def get_detected_by_ranking(observations):
+def get_detected_by(observations, source):
     df = pd.DataFrame(observations)
-    df = df.query("source=='ranking'").copy()
+    df = df[df.source==source].copy()
     df["detected"] = 1*(df["s"] == 1)
     df["tested"] = 1
     grouped = df.groupby("t_test")[["detected", "tested"]].sum().sort_index()
@@ -238,7 +238,6 @@ class Scenario():
             self.observations = pd.DataFrame(self.observations)
             self.observations = self.observations[["source", "t_test", "i", "s"]]
             self.obs_counts = get_obs_counts(self.observations)
-            self.detected_by_ranking = get_detected_by_ranking(self.observations)
 
     def plot(self, t):
         fig, ax = plt.subplots(1, 1, figsize=(5, 5))
@@ -285,3 +284,6 @@ class Scenario():
         detected = merged["infected"].cumsum().values
         tested = 1 + np.arange(len(detected))
         return tested, detected
+
+    def detected_by(self, source):
+        return get_detected_by(self.observations, source)
