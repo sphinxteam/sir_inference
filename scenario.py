@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 from sklearn.metrics import roc_curve, roc_auc_score
 from sir_model import (
     get_infection_probas, propagate, STATES,
-    infected_individuals, random_individuals
+    infected_individuals, random_individuals, symptomatic_individuals
 )
 from ranking import RANKINGS, csr_to_list
 
@@ -58,7 +58,7 @@ def get_status(states, quarantine):
 
 
 def get_obs_counts(observations):
-    sources = ["ranking", "infected", "random"]
+    sources = ["ranking", "infected", "random", "symptomatic"]
     t_max = observations["t_test"].max()
     obs_count = observations.groupby(["source", "t_test", "s"]).size()
     full_index = pd.MultiIndex.from_product(
@@ -129,19 +129,28 @@ class Scenario():
                 for i in selected
             ]
         # random
-        n_obs = self.observation_options["n_random"]
+        n_obs = self.observation_options.get("n_random", 0)
         selected = random_individuals(self.N, n_obs)
         self.observations += [
             dict(i=i, s=self.states[t, i], t_test=t, source="random")
             for i in selected
         ]
         # infected
-        n_obs = self.observation_options["n_infected"]
+        n_obs = self.observation_options.get("n_infected", 0)
         selected = infected_individuals(self.states[t], n_obs)
         self.observations += [
             dict(i=i, s=self.states[t, i], t_test=t, source="infected")
             for i in selected
         ]
+        # symptomatic
+        p = self.observation_options.get("p_symptomatic", 0)
+        if p:
+            tau = self.observation_options["tau"]
+            selected = symptomatic_individuals(self.states, t, tau, p)
+            self.observations += [
+                dict(i=i, s=self.states[t, i], t_test=t, source="symptomatic")
+                for i in selected
+            ]
 
     def update_quarantine(self, t):
         "Assumes observations[t] computed."

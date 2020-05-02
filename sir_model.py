@@ -50,6 +50,20 @@ def infected_individuals(states, n_obs):
     return np.random.choice(infected, n_obs, replace=False)
 
 
+def symptomatic_individuals(states, t, tau, p):
+    tI = t - tau
+    if (tI <= 0):
+        return []
+    # S at tI-1 and I at tI
+    symptomatic, = np.where(
+        np.logical_and(states[tI - 1, :]==0, states[tI, :]==1)
+    )
+    # select proportion p of them
+    n_symptomatic = len(symptomatic)
+    n_obs = int(p * n_symptomatic)
+    return np.random.choice(symptomatic, n_obs, replace=False)
+
+
 def random_observations(model, tests):
     """
     Observations given by random sampling of the population.
