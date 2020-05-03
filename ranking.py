@@ -129,17 +129,17 @@ def ranking_tracing(t, model, observations, params):
     if (t < tau):
         print(f"cannot do ranking_tracing for t={t} < tau={tau}")
         return ranking_random(t, model, observations, params)
-    # last_tested : observations s=I at t_test=t-1
+    # last_tested : observations s=I for t-tau <= t_test < t
     last_tested = set(
         obs["i"] for obs in observations
-        if obs["s"] == 1 and obs["t_test"] == t-1
+        if obs["s"] == 1 and (t - tau <= obs["t_test"]) and (obs["t_test"] < t)
     )
     # contacts with last_tested people during [t - tau, t]
     contacts = pd.DataFrame(
         dict(i=i, j=j, t=t_contact)
         for t_contact in range(t - tau, t)
-        for i, j, _ in csr_to_list(model.transmissions[t_contact])
-        if j in last_tested
+        for i, j, lamb in csr_to_list(model.transmissions[t_contact])
+        if j in last_tested and lamb # lamb = 0 does not count
     )
     encounters = pd.DataFrame({"i": range(model.N)})
     # no encounters -> count = 0
