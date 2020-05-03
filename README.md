@@ -4,7 +4,7 @@
 
 We present a probabilistic inference framework based on mean field and beleif propagation technics for estimating risk of infection from proximity tracking data used in contact-tracing. The algorithm,  using the SIR inference model, is described in [these notes](https://www.overleaf.com/read/tfhcpbvhmcwq), where you can find more information about our approach.
 
-Simple demonstration of the package and of the inference procedure can be found on these google colab notebooks:
+Simple demonstrations of the package and of the inference procedure can be found on these google colab notebooks:
 
 - [Demo 1](https://colab.research.google.com/drive/15qClUFJl_mWTVL6e2VG9mgsAgRQ9Armb)
 
