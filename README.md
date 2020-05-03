@@ -12,4 +12,4 @@ Simple demonstrations of the package and of the inference procedure can be found
 
 - See [Scatterplot](https://colab.research.google.com/drive/1QcK2ilzqRiE7bnHqrfxjHhXbwEs_12WU) for a sanity check comparing the probabilities estimated by mean field / DMP to the frequencies obtained by Monte Carlo runs.
 
-[Antoine Baker](antoinebaker59@gmail.com), Florent Krzakala, Marc Mézard, Stefano Sarao Mannelli, Maria Refinetti, Lenka Zdeborová
+[Antoine Baker](mailto:antoinebaker59@gmail.com), [Florent Krzakala](mailto:florent.krzakala@gmail.com), [Marc Mézard](mailto:marc.mezard@gmail.com), [Stefano Sarao Mannelli](mailto:stefano.sarao@gmail.com), [Maria Refinetti](mailto:mariaref@gmail.com) and [Lenka Zdeborová](mailto:lenka.zdeborova@gmail.com)
