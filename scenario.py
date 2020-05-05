@@ -115,7 +115,14 @@ class Scenario():
     def update_observations(self, t):
         "Assumes states[t] and scores[t] computed."
         # ranking
-        n_obs = self.observation_options.get("n_ranking", 0)
+        n_detected = len([
+            obs["i"] for obs in self.observations
+            if obs["t_test"] == t - 1  and obs["s"] == 1
+        ])
+        n_obs = int(max(
+            self.observation_options.get("n_ranking", 0),
+            self.observation_options.get("k_ranking", 0) * n_detected
+        ))
         if n_obs and self.ranking_options:
             # list of people to test
             ranked = list(self.scores[t]["i"])
