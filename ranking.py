@@ -21,11 +21,11 @@ def ranking_inference(t, model, observations, params):
     params["init"] : "all_S" (all susceptible) or "freqs" (frequency at t_start)
 
     Returns: ranked dataframe probas[["i","rank","score","p_I","p_R","p_S"]]
+    If t < t_start cannot do the inference ranking, returns a random ranking.
     """
     t_start = params["t_start"]
     tau = params["tau"]
     if (t < t_start):
-        print(f"cannot do ranking_inference for t={t} < t_start={t_start}")
         return ranking_random(t, model, observations, params)
     algo = MeanField if params["algo"] == "MF" else DynamicMessagePassing
     if params["init"] == "all_S":
@@ -68,11 +68,11 @@ def ranking_backtrack(t, model, observations, params):
     params["init"] : "all_S" (all susceptible) or "freqs" (frequency at t_start)
 
     Returns: ranked dataframe probas[["i","rank","score","p_I","p_R","p_S"]]
+    If t < delta cannot do the backtrack ranking, returns a random ranking.
     """
     delta = params["delta"]
     tau = params["tau"]
     if (t < delta):
-        print(f"cannot do ranking_backtrack for t={t} < delta={delta}")
         return ranking_random(t, model, observations, params)
     t_start = t - delta
     algo = MeanField if params["algo"] == "MF" else DynamicMessagePassing
@@ -124,10 +124,10 @@ def ranking_tracing(t, model, observations, params):
     params["tau"] = tau
 
     Returns: ranked dataframe encounters[["i","rank","score","count"]]
+    If t < tau cannot do the tracing ranking, returns a random ranking.
     """
     tau = params["tau"]
     if (t < tau):
-        print(f"cannot do ranking_tracing for t={t} < tau={tau}")
         return ranking_random(t, model, observations, params)
     # last_tested : observations s=I for t-tau <= t_test < t
     last_tested = set(
@@ -170,14 +170,14 @@ def ranking_tracing_backtrack(t, model, observations, params):
     params["init"] : "all_S" (all susceptible) or "freqs" (frequency at t_start)
 
     Returns: ranked dataframe df[["i","rank","score","count","p_I","p_R","p_S"]]
+    If t < t_start or t < tau cannot do the tracing + backtrack ranking,
+    returns a random ranking.
     """
     tau = params["tau"]
     if (t < tau):
-        print(f"cannot do ranking_tracing_backtrack for t={t} < tau={tau}")
         return ranking_random(t, model, observations, params)
     delta = params["delta"]
     if (t < delta):
-        print(f"cannot do ranking_tracing_backtrack for t={t} < delta={delta}")
         return ranking_random(t, model, observations, params)
     encounters = ranking_tracing(t, model, observations, params)
     encounters.drop(columns=["rank","score"], inplace=True)
