@@ -40,12 +40,12 @@ def random_individuals(N, n_obs):
 
 
 def infected_individuals(states, n_obs):
+    """
+    Return n_obs infected individuals in states.
+    If n_infected < n_obs, then it returns all the n_infected ones.
+    """
     infected, = np.where(states == 1)
     if len(infected) < n_obs:
-        print(
-            f"WARNING only {len(infected)} infected "
-            f"cannot return n_obs={n_obs} observations"
-        )
         return infected
     return np.random.choice(infected, n_obs, replace=False)
 

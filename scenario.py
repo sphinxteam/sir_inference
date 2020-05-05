@@ -89,6 +89,7 @@ class Scenario():
         self.ranking_options = ranking_options
         if ranking_options:
             self.ranking = RANKINGS[ranking_options["name"]]
+            print(f"Using {self.ranking.__name__} to rank")
         self.observation_options = observation_options
         self.intervention_options = intervention_options
 
@@ -214,8 +215,7 @@ class Scenario():
             self.update_transmissions(t)
 
     def run(self, t_max, print_every=0):
-        if print_every:
-            print(f"Using seed={self.seed}")
+        print(f"Using seed={self.seed}")
         np.random.seed(self.seed)
         self.t_max = t_max
         # initialize
