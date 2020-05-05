@@ -11,6 +11,7 @@ __pycache__/
 
 # data
 data*
+prox_100K*
 *.png
 *.zip
 *.csv
