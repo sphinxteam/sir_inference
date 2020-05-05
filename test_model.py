@@ -6,7 +6,7 @@ import pickle
 from sir_model import indicator, STATES
 
 
-def compute_averages(model, n_run, times, fname=None):
+def compute_averages(model, n_run, times, fname=None, print_every=100):
     """
     Computes the Monte Carlo frequencies and average estimated probabilites.
     - model : EpidemicModel instance to generate the SIR simulation
@@ -23,7 +23,7 @@ def compute_averages(model, n_run, times, fname=None):
     recover_probas = model.recover_probas
     # monte carlo runs
     for n in range(n_run):
-        if (n % 100 == 0):
+        if (n % print_every == 0):
             print(f"n = {n} / {n_run}")
         model.time_evolution(recover_probas, transmissions, print_every=0)
         states[n] = indicator(model.states[times])
