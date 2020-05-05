@@ -10,6 +10,11 @@ logger = logging.getLogger(__name__)
 STATES = ["S", "I", "R"]
 
 
+def csr_to_list(x):
+    x_coo = x.tocoo()
+    return zip(x_coo.row, x_coo.col, x_coo.data)
+
+
 def indicator(states):
     probas = np.zeros(states.shape + (3,))
     for s in [0,1,2]:
@@ -149,7 +154,7 @@ class EpidemicModel():
         self.x_pos = x_pos
         self.y_pos = y_pos
 
-    def time_evolution(self, recover_probas, transmissions, print_every=10):
+    def time_evolution(self, recover_probas, transmissions, print_every=0):
         """Run the simulation where
         - recover_probas[i] = mu_i time-independent
         - transmissions[t] = csr sparse matrix of i, j, lambda_ij(t)
@@ -159,6 +164,8 @@ class EpidemicModel():
         T = len(transmissions)
         states = np.zeros((T + 1, self.N), dtype=int)
         states[0] = self.initial_states
+        if print_every:
+            print("Running SIR simulation")
         # iterate over time steps
         for t in range(T):
             if print_every and (t % print_every == 0):
@@ -188,18 +195,59 @@ class EpidemicModel():
     def sample_transmissions(self):
         raise NotImplementedError
 
-    def generate_transmissions(self, T):
-        self.transmissions = [self.sample_transmissions() for t in range(T)]
-
-    def run(self, T, print_every=10):
+    def generate_transmissions(self, T, print_every=0):
+        transmissions = []
         if print_every:
             print("Generating transmissions")
-        self.generate_transmissions(T)
-        if print_every:
-            print("Running simulation")
+        for t in range(T):
+            if print_every and (t % print_every == 0):
+                print(f"t = {t} / {T}")
+            transmissions.append(self.sample_transmissions())
+        self.transmissions = transmissions
+
+    def run(self, T, print_every=0):
+        self.generate_transmissions(T, print_every=print_every)
         self.time_evolution(
             self.recover_probas, self.transmissions, print_every=print_every
         )
+
+    def load_transmissions(self, csv_file):
+        print(f"Loading transmissions from {csv_file}")
+        df = pd.read_csv(csv_file)
+        assert all(df.columns == ["t","i","j","lamb"])
+        assert df["i"].max() == df["j"].max() == self.N - 1
+        tmax = df["t"].max() + 1
+        transmissions = []
+        for t in range(tmax):
+            sub_data = df.query(f"t=={t}")
+            i, j, lamb = sub_data["i"], sub_data["j"], sub_data["lamb"]
+            transmissions.append(
+                csr_matrix((lamb, (i, j)), shape=(self.N, self.N))
+            )
+        self.transmissions = transmissions
+
+    def save_transmissions(self, csv_file):
+        print(f"Saving transmissions in {csv_file}")
+        df_transmissions = pd.DataFrame(
+            dict(t=t, i=i, j=j, lamb=lamb)
+            for t, A in enumerate(self.transmissions)
+            for i, j, lamb in csr_to_list(A)
+        )[["t","i","j","lamb"]]
+        df_transmissions.to_csv(csv_file, index=False)
+
+    def load_positions(self, csv_file):
+        print(f"Loading positions from {csv_file}")
+        df = pd.read_csv(csv_file)
+        assert all(df.columns == ["x_pos","y_pos"])
+        assert df.shape[0]==self.N
+        self.x_pos = df["x_pos"].values
+        self.y_pos = df["y_pos"].values
+
+    def save_positions(self, csv_file):
+        print(f"Saving positions in {csv_file}")
+        df_pos = pd.DataFrame({"x_pos":self.x_pos, "y_pos":self.y_pos})
+        df_pos.to_csv(csv_file, index=False)
+
 
 class ProximityModel(EpidemicModel):
     """
@@ -261,6 +309,54 @@ class ProximityModel(EpidemicModel):
         # sanity check
         assert contacts.sum() == transmissions.nnz
         assert np.all(i != j)
+        return transmissions
+
+
+class FastProximityModel(EpidemicModel):
+    """
+    Model:
+    - N = population
+    - mu = constant recovery proba
+    - lamd = constant transmission rate (if in contact)
+    - proba_contact = np.exp(-distance / scale)
+    - initial_states = random patient zero
+    - x_pos, y_pos = random uniform
+
+    You can also provide the initial_states.
+    """
+    def __init__(self, N, scale, mu, lamb, initial_states = None):
+        self.N = N
+        self.scale = scale
+        self.mu = mu
+        self.lamb = lamb
+        # initial states : patient zero infected
+        if initial_states is None:
+            initial_states = patient_zeros_states(N, 1)
+        # positions
+        x_pos = np.sqrt(N)*np.random.rand(N)
+        y_pos = np.sqrt(N)*np.random.rand(N)
+        # for soft geometric graph generation
+        self.pos  = {i: (x, y) for i, (x, y) in enumerate(zip(x_pos,y_pos))}
+        self.radius = 5*scale
+        def p_dist(d):
+            return np.exp(-d/scale)
+        self.p_dist = p_dist
+        # constant recovery proba
+        self.recover_probas = mu*np.ones(N)
+        super().__init__(initial_states, x_pos, y_pos)
+
+    def sample_contacts(self):
+        "contacts = csr sparse matrix of i, j in contact"
+        g=nx.soft_random_geometric_graph(
+            self.N, radius=self.radius, p_dist=self.p_dist, pos=self.pos
+        )
+        contacts = nx.to_scipy_sparse_matrix(g)
+        return contacts
+
+    def sample_transmissions(self):
+        "transmissions = csr sparse matrix of i, j, lambda_ij"
+        contacts = self.sample_contacts()
+        transmissions = contacts.multiply(self.lamb)
         return transmissions
 
 
