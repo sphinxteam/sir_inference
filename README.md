@@ -16,7 +16,7 @@ We present a probabilistic inference framework based on mean field and belief pr
 
 ## Presentations and slides
 
-- Lenka Zdeborova presented this work online at the "ELLIS against Covid-19" [event](https://ellis.eu/en/covid-19/events/ellis-against-covid-19-06-05-2020) on May 6, 2020, [see slides](Ellis_talk.pdf)
+- Lenka Zdeborova presented this work online at the "ELLIS against Covid-19" [event](https://ellis.eu/en/covid-19/events/ellis-against-covid-19-06-05-2020) on May 6, 2020, [see slides](Ellis_talk.pdf) or [the talk on youtube](https://www.youtube.com/watch?v=weaRmSVA3yM&t=96m10s)
 
 ## Authors
 
