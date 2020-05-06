@@ -12,4 +12,10 @@ We present a probabilistic inference framework based on mean field and belief pr
 
 - Finally [Demo 3](https://colab.research.google.com/drive/1pRq13j8o6Y8GRWa_IDb_Erj-jqyjWDnM#scrollTo=bVi7bEAGgijX) compares the efficiency of quarantine  strategies using contact tracing and mean-field inference in simple SIR models. It was used to generate the image shown above.
 
+## Presentations and slides
+
+- Lenka Zdeborova presented this work online at the "ELLIS against Covid-19" [event](https://ellis.eu/en/covid-19/events/ellis-against-covid-19-06-05-2020) on May 6, 2020, [see slides](Ellis_talk.pdf)
+
+## Authors
+
 [Antoine Baker](mailto:antoinebaker59@gmail.com), [Florent Krzakala](mailto:florent.krzakala@gmail.com), [Marc Mézard](mailto:marc.mezard@gmail.com), [Stefano Sarao Mannelli](mailto:stefano.sarao@gmail.com), [Maria Refinetti](mailto:mariaref@gmail.com) and [Lenka Zdeborová](mailto:lenka.zdeborova@gmail.com)
