@@ -428,9 +428,8 @@ class NetworkModel(EpidemicModel):
         return transmissions
 
 
-def read_ferretti_data(csv_file, lamb):
-    N = 10000
-    df = pd.read_csv(csv_file)
+def read_ferretti_data(csv_file, lamb, N):
+    df = pd.read_csv(csv_file, usecols=["ID","ID_2","time"])
     assert N-1 == df["ID"].max() == df["ID_2"].max()
     tmax = df["time"].max()
     transmissions = []
@@ -454,11 +453,11 @@ def proximity_model(N, N_patient_zero, scale, mu, lamb, t_max, seed):
     return model
 
 
-def ferretti_model(N_patient_zero=10, mu=1/15, lamb=0.02, seed=123):
+def ferretti_model(N_patient_zero=10, mu=1/15, lamb=0.02, seed=123,
+                   csv_file="all_interaction_10000.csv", N=10000):
     print("Using Ferretti transmissions")
     np.random.seed(seed)
-    N = 10000
-    transmissions = read_ferretti_data("all_interaction_10000.csv", lamb=lamb)
+    transmissions = read_ferretti_data(csv_file, lamb=lamb, N=N)
     initial_states = patient_zeros_states(N, N_patient_zero)
     # random x_pos, y_pos
     x_pos = np.random.rand(N)
