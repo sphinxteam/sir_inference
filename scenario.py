@@ -23,7 +23,7 @@ def inactivate_transmission(transmission, quarantined):
 def get_detected_by(observations, source):
     df = pd.DataFrame(observations)
     df = df[df.source==source].copy()
-    df["detected"] = 1*(df["s"] == 1)
+    df["detected"] = 1*(df["s_true"] == 1)
     df["tested"] = 1
     grouped = df.groupby("t_test")[["detected", "tested"]].sum().sort_index()
     grouped["total_detected"] = grouped["detected"].cumsum()
@@ -60,14 +60,14 @@ def get_status(states, quarantine):
 def get_obs_counts(observations):
     sources = ["ranking", "infected", "random", "symptomatic"]
     t_max = observations["t_test"].max()
-    obs_count = observations.groupby(["source", "t_test", "s"]).size()
+    obs_count = observations.groupby(["source", "t_test", "s_true"]).size()
     full_index = pd.MultiIndex.from_product(
-        [sources, range(t_max), range(3)], names=["source", "t_test", "s"]
+        [sources, range(t_max), range(3)], names=["source", "t_test", "s_true"]
     )
     obs_count = obs_count[full_index].fillna(0)
     keys = {idx: u for idx, u in enumerate(STATES)}
     obs_count = {
-        source: obs_count.loc[source].unstack("s").rename(columns=keys)
+        source: obs_count.loc[source].unstack("s_true").rename(columns=keys)
         for source in sources
     }
     return obs_count
@@ -112,8 +112,27 @@ class Scenario():
         )
         self.scores[t]["t"] = t
 
+    def generate_obs(self, t, source, selected):
+        list_obs = [
+            dict(i=i, s_true=self.states[t, i], t_test=t, source=source)
+            for i in selected
+        ]
+        fpr = self.observation_options.get("fpr", 0)
+        fnr = self.observation_options.get("fnr", 0)
+        for obs in list_obs:
+            obs["s"] = obs["s_true"]
+            # false positive s_true=S -> s=I
+            if fpr and (obs["s_true"] == 0) and (np.random.rand() < fpr):
+                obs["s"] = 1
+            # false negative s_true=I -> s=S
+            if fnr and (obs["s_true"] == 1) and (np.random.rand() < fnr):
+                obs["s"] = 0
+        return list_obs
+
     def update_observations(self, t):
-        "Assumes states[t] and scores[t] computed."
+        """Assumes states[t] and scores[t] computed.
+        NOTE: s_true = actual status, s = assumed status
+        """
         # ranking
         n_detected = len([
             obs["i"] for obs in self.observations
@@ -131,33 +150,21 @@ class Scenario():
             )
             selected = [i for i in ranked if i not in already_detected]
             selected = selected[:n_obs]
-            self.observations += [
-                dict(i=i, s=self.states[t, i], t_test=t, source="ranking")
-                for i in selected
-            ]
+            self.observations += self.generate_obs(t, "ranking", selected)
         # random
         n_obs = self.observation_options.get("n_random", 0)
         selected = random_individuals(self.N, n_obs)
-        self.observations += [
-            dict(i=i, s=self.states[t, i], t_test=t, source="random")
-            for i in selected
-        ]
+        self.observations += self.generate_obs(t, "random", selected)
         # infected
         n_obs = self.observation_options.get("n_infected", 0)
         selected = infected_individuals(self.states[t], n_obs)
-        self.observations += [
-            dict(i=i, s=self.states[t, i], t_test=t, source="infected")
-            for i in selected
-        ]
+        self.observations += self.generate_obs(t, "infected", selected)
         # symptomatic
         p = self.observation_options.get("p_symptomatic", 0)
         if p:
             tau = self.observation_options["tau"]
             selected = symptomatic_individuals(self.states, t, tau, p)
-            self.observations += [
-                dict(i=i, s=self.states[t, i], t_test=t, source="symptomatic")
-                for i in selected
-            ]
+            self.observations += self.generate_obs(t, "symptomatic", selected)
 
     def update_quarantine(self, t):
         "Assumes observations[t] computed."
@@ -243,7 +250,9 @@ class Scenario():
             self.scores = pd.concat(self.scores, ignore_index=True, sort=False)
         if self.observation_options:
             self.observations = pd.DataFrame(self.observations)
-            self.observations = self.observations[["source", "t_test", "i", "s"]]
+            self.observations = self.observations[
+                ["source", "t_test", "i", "s", "s_true"]
+            ]
             self.obs_counts = get_obs_counts(self.observations)
 
     def plot(self, t):
