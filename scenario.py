@@ -23,6 +23,8 @@ def inactivate_transmission(transmission, quarantined):
 def get_detected_by(observations, source):
     df = pd.DataFrame(observations)
     df = df[df.source==source].copy()
+    if ("s_true" not in df.columns):
+        df["s_true"] = df["s"]
     df["detected"] = 1*(df["s_true"] == 1)
     df["tested"] = 1
     grouped = df.groupby("t_test")[["detected", "tested"]].sum().sort_index()
