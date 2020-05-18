@@ -92,8 +92,16 @@ class Scenario():
         if ranking_options:
             self.ranking = RANKINGS[ranking_options["name"]]
             print(f"Using {self.ranking.__name__} to rank")
+        p_untracked =  observation_options.get("p_untracked", 0)
+        self.n_untracked = int(p_untracked*model.N)
         self.observation_options = observation_options
         self.intervention_options = intervention_options
+
+    def select_untracked(self):
+        print(f"Selecting {self.n_untracked}/{self.N} untracked individuals")
+        selected = np.random.choice(self.N, self.n_untracked, replace=False)
+        self.untracked = np.isin(np.arange(self.N), selected)
+        assert self.untracked.sum() == self.n_untracked
 
     def update_states(self, t):
         "Assumes states[t-1] and transmissions[t-1] computed"
@@ -101,7 +109,7 @@ class Scenario():
             self.states[t] = self.initial_states
             return
         infection_probas = get_infection_probas(
-            self.states[t-1], self.transmissions[t-1]
+            self.states[t-1], self.true_transmissions[t-1]
         )
         self.states[t] = propagate(
             self.states[t-1], infection_probas, self.recover_probas
@@ -182,8 +190,11 @@ class Scenario():
     def update_transmissions(self, t):
         "Assumes quarantine[t] computed."
         # inactivate the transmissions at t
+        self.true_transmissions[t] = inactivate_transmission(
+            self.true_transmissions[t], self.quarantine[t]
+        )
         self.transmissions[t] = inactivate_transmission(
-            self.transmissions[t], self.quarantine[t]
+            self.true_transmissions[t], self.untracked
         )
 
     def save(self, filename):
@@ -196,18 +207,25 @@ class Scenario():
             self.observations.to_csv(
                 os.path.join(filename, "observations.csv"), index=False
             )
+        if self.n_untracked:
+            untracked = pd.DataFrame({
+                "i":range(self.N), "untracked":self.untracked
+            })
+            untracked.to_csv(
+                os.path.join(filename, "untracked.csv"), index=False
+            )
         if self.ranking_options:
             self.scores.to_csv(
                 os.path.join(filename, "scores.csv"), index=False
             )
-        print("Saving transmissions...")
+        print("Saving true transmissions...")
         df_transmissions = pd.DataFrame(
             dict(t=t, i=i, j=j, lamb=lamb)
-            for t, A in enumerate(self.transmissions)
+            for t, A in enumerate(self.true_transmissions)
             for i, j, lamb in csr_to_list(A)
         )
         df_transmissions.to_csv(
-            os.path.join(filename, "transmissions.csv"), index=False
+            os.path.join(filename, "true_transmissions.csv"), index=False
         )
         params = dict(
             N=self.N, seed=self.seed, t_max=self.t_max,
@@ -238,8 +256,13 @@ class Scenario():
         self.states = np.zeros((t_max, self.N), dtype=int)
         self.quarantine = np.zeros((t_max, self.N), dtype=int)
         self.scores = [None for _ in range(t_max)]
+        self.true_transmissions = self.base_transmissions.copy()
         self.transmissions = self.base_transmissions.copy()
         self.observations = []
+        self.select_untracked()
+        # select_untracked calls the RNG
+        # -> set the seed again for backward reproducibility
+        np.random.seed(self.seed)
         # iterate
         for t in range(t_max):
             if print_every and (t % print_every == 0):
